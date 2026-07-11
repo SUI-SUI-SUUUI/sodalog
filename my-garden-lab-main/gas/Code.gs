@@ -1,0 +1,802 @@
+/**
+ * My Garden Lab - LINE Webhook
+ *
+ * LINEで届いたテキストメッセージをスプレッドシートへ記録する。
+ * LINEで届いた画像をGoogle Driveのimagesフォルダへ保存する。
+ * 保存した画像URLを、最新の園芸記録へ追加する。
+ *
+ * テキスト入力形式：
+ * 作業日_場所_詳細場所_植物名_作業内容
+ *
+ * 例：
+ * 2026/04/11_北側_中央_つつじ_剪定
+ */
+
+var SHEET_NAME = 'garden_log';
+
+var HEADER = [
+  '記録日時',
+  '作業日',
+  '場所',
+  '詳細場所',
+  '植物名',
+  '作業内容',
+  'メモ',
+  '画像URL',
+  'DriveフォルダURL'
+];
+
+/**
+ * LINEプラットフォームからのPOSTを受け取る
+ */
+function doPost(e) {
+  try {
+    debugLog('doPost 開始');
+
+    if (!e || !e.postData || !e.postData.contents) {
+      debugLog('エラー: postData がありません');
+      return createJsonResponse({ status: 'no postData' });
+    }
+
+    var body = JSON.parse(e.postData.contents);
+    debugLog('受信body: ' + JSON.stringify(body));
+
+    var events = body.events || [];
+    debugLog('events数: ' + events.length);
+
+    events.forEach(function (event) {
+      try {
+        debugLog('event: ' + JSON.stringify(event));
+
+        if (event.type !== 'message' || !event.message) {
+          debugLog('対象外イベント: ' + event.type);
+          return;
+        }
+
+        if (event.message.type === 'text') {
+          handleTextMessage(event);
+          return;
+        }
+
+        if (event.message.type === 'image') {
+          handleImageMessage(event);
+          return;
+        }
+
+        debugLog(
+          '対象外メッセージタイプ: ' +
+          event.message.type
+        );
+
+      } catch (eventError) {
+        debugLog(
+          'イベント処理エラー: ' +
+          eventError
+        );
+      }
+    });
+
+  } catch (err) {
+    debugLog(
+      'doPost error: ' +
+      err
+    );
+  }
+
+  return createJsonResponse({ status: 'ok' });
+}
+
+/**
+ * ブラウザからURLを開いたときの確認用
+ */
+function doGet(e) {
+  return ContentService
+    .createTextOutput(
+      'My Garden Lab Webhook is running.'
+    );
+}
+
+/**
+ * テキストメッセージを処理する
+ */
+function handleTextMessage(event) {
+  var text = event.message.text;
+  var replyToken = event.replyToken;
+
+  debugLog('handleTextMessage 開始');
+  debugLog('受信テキスト: ' + text);
+
+  var parsed = parseText(text);
+  var sheet = getSheet();
+
+  if (!parsed) {
+    debugLog('入力形式エラー');
+
+    replyMessage(
+      replyToken,
+      '形式が正しく読み取れませんでした。\n' +
+      '次の形式で送ってください:\n' +
+      '作業日_場所_詳細場所_植物名_作業内容\n' +
+      '例: 2026/04/11_北側_中央_つつじ_剪定'
+    );
+
+    return;
+  }
+
+  sheet.appendRow([
+    new Date(),
+    parsed.workDate,
+    parsed.place,
+    parsed.detailPlace,
+    parsed.plant,
+    parsed.task,
+    '',
+    '',
+    ''
+  ]);
+
+  debugLog(
+    'スプレッドシートへの記録完了'
+  );
+
+  replyMessage(
+    replyToken,
+    '記録しました:\n' +
+    '作業日: ' + parsed.workDate + '\n' +
+    '場所: ' + parsed.place + '\n' +
+    '詳細場所: ' + parsed.detailPlace + '\n' +
+    '植物名: ' + parsed.plant + '\n' +
+    '作業内容: ' + parsed.task + '\n\n' +
+    '続けて画像を送ると、この記録に追加されます。'
+  );
+}
+
+/**
+ * 画像メッセージを処理する
+ */
+function handleImageMessage(event) {
+  var messageId = event.message.id;
+  var replyToken = event.replyToken;
+
+  debugLog('handleImageMessage 開始');
+  debugLog('messageId: ' + messageId);
+
+  if (!messageId) {
+    debugLog(
+      'エラー: messageId がありません'
+    );
+
+    replyMessage(
+      replyToken,
+      '画像を読み取れませんでした。' +
+      'もう一度送ってください。'
+    );
+
+    return;
+  }
+
+  try {
+    var file = saveLineImageToDrive(
+      messageId
+    );
+
+    var imageUrl = file.getUrl();
+    var folderUrl = getImageFolderUrl();
+
+    debugLog('画像保存完了');
+    debugLog(
+      'ファイル名: ' +
+      file.getName()
+    );
+    debugLog(
+      'ファイルURL: ' +
+      imageUrl
+    );
+
+    var updatedRow =
+      addImageUrlToLatestRecord(
+        imageUrl,
+        folderUrl
+      );
+
+    if (updatedRow) {
+      debugLog(
+        '画像URLを記録しました。行番号: ' +
+        updatedRow
+      );
+
+      replyMessage(
+        replyToken,
+        '画像を保存し、園芸記録に追加しました。\n' +
+        'ファイル名: ' +
+        file.getName()
+      );
+
+    } else {
+      debugLog(
+        '画像URLを追加できる記録がありません'
+      );
+
+      replyMessage(
+        replyToken,
+        '画像はGoogle Driveへ保存しました。\n' +
+        'ただし、画像を追加できる園芸記録が見つかりませんでした。\n' +
+        '先に作業内容を送信してください。'
+      );
+    }
+
+  } catch (err) {
+    debugLog(
+      '画像保存エラー: ' +
+      err
+    );
+
+    replyMessage(
+      replyToken,
+      '画像を保存できませんでした。\n' +
+      '時間をおいて、もう一度送ってください。'
+    );
+  }
+}
+
+/**
+ * LINEから画像データを取得し、
+ * Google Driveへ保存する
+ */
+function saveLineImageToDrive(messageId) {
+  var scriptProperties =
+    PropertiesService.getScriptProperties();
+
+  var token = scriptProperties.getProperty(
+    'LINE_CHANNEL_ACCESS_TOKEN'
+  );
+
+  var folderId =
+    scriptProperties.getProperty(
+      'IMAGE_FOLDER_ID'
+    );
+
+  if (!token) {
+    throw new Error(
+      'LINE_CHANNEL_ACCESS_TOKEN が設定されていません'
+    );
+  }
+
+  if (!folderId) {
+    throw new Error(
+      'IMAGE_FOLDER_ID が設定されていません'
+    );
+  }
+
+  var contentUrl =
+    'https://api-data.line.me/v2/bot/message/' +
+    messageId +
+    '/content';
+
+  var options = {
+    method: 'get',
+    headers: {
+      Authorization: 'Bearer ' + token
+    },
+    muteHttpExceptions: true
+  };
+
+  var response = UrlFetchApp.fetch(
+    contentUrl,
+    options
+  );
+
+  var statusCode =
+    response.getResponseCode();
+
+  debugLog(
+    '画像取得 status: ' +
+    statusCode
+  );
+
+  if (statusCode !== 200) {
+    var responseBody =
+      response.getContentText();
+
+    debugLog(
+      '画像取得 body: ' +
+      responseBody
+    );
+
+    throw new Error(
+      'LINEからの画像取得に失敗しました。status=' +
+      statusCode
+    );
+  }
+
+  var blob = response.getBlob();
+  var contentType =
+    blob.getContentType();
+
+  debugLog(
+    '画像Content-Type: ' +
+    contentType
+  );
+
+  var extension =
+    getImageExtension(contentType);
+
+  var fileName =
+    createImageFileName(extension);
+
+  blob.setName(fileName);
+
+  var folder =
+    DriveApp.getFolderById(folderId);
+
+  return folder.createFile(blob);
+}
+
+/**
+ * 保存した画像URLを、
+ * 画像URLが空欄の最新記録へ追加する
+ */
+function addImageUrlToLatestRecord(
+  imageUrl,
+  folderUrl
+) {
+  var sheet = getSheet();
+  var lastRow = sheet.getLastRow();
+
+  if (lastRow < 2) {
+    debugLog(
+      'garden_logに記録行がありません'
+    );
+
+    return null;
+  }
+
+  var imageUrlColumn = 8;
+  var folderUrlColumn = 9;
+
+  for (
+    var row = lastRow;
+    row >= 2;
+    row--
+  ) {
+    var imageCell =
+      sheet.getRange(
+        row,
+        imageUrlColumn
+      );
+
+    var currentImageUrl =
+      imageCell.getValue();
+
+    if (!currentImageUrl) {
+      imageCell.setValue(imageUrl);
+
+      sheet
+        .getRange(
+          row,
+          folderUrlColumn
+        )
+        .setValue(folderUrl);
+
+      return row;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * imagesフォルダのURLを取得する
+ */
+function getImageFolderUrl() {
+  var folderId =
+    PropertiesService
+      .getScriptProperties()
+      .getProperty(
+        'IMAGE_FOLDER_ID'
+      );
+
+  if (!folderId) {
+    throw new Error(
+      'IMAGE_FOLDER_ID が設定されていません'
+    );
+  }
+
+  return DriveApp
+    .getFolderById(folderId)
+    .getUrl();
+}
+
+/**
+ * Content-Typeから拡張子を決める
+ */
+function getImageExtension(contentType) {
+  if (contentType === 'image/png') {
+    return 'png';
+  }
+
+  if (contentType === 'image/gif') {
+    return 'gif';
+  }
+
+  if (contentType === 'image/webp') {
+    return 'webp';
+  }
+
+  return 'jpg';
+}
+
+/**
+ * 保存する画像のファイル名を作る
+ *
+ * 例：
+ * 20260710_114530_123.jpg
+ */
+function createImageFileName(extension) {
+  var timeZone =
+    Session.getScriptTimeZone();
+
+  var dateText =
+    Utilities.formatDate(
+      new Date(),
+      timeZone,
+      'yyyyMMdd_HHmmss_SSS'
+    );
+
+  return dateText + '.' + extension;
+}
+
+/**
+ * テキストを5項目に分解する
+ */
+function parseText(text) {
+  if (!text) {
+    debugLog(
+      'parseText: text が空です'
+    );
+
+    return null;
+  }
+
+  var parts =
+    text.trim().split('_');
+
+  if (parts.length !== 5) {
+    debugLog(
+      'parseText: 入力項目数エラー。項目数=' +
+      parts.length
+    );
+
+    return null;
+  }
+
+  return {
+    workDate: parts[0],
+    place: parts[1],
+    detailPlace: parts[2],
+    plant: parts[3],
+    task: parts[4]
+  };
+}
+
+/**
+ * 記録用シートを取得する
+ */
+function getSheet() {
+  var ss =
+    SpreadsheetApp.getActiveSpreadsheet();
+
+  var sheet =
+    ss.getSheetByName(SHEET_NAME);
+
+  if (!sheet) {
+    sheet =
+      ss.insertSheet(SHEET_NAME);
+
+    sheet.appendRow(HEADER);
+
+    debugLog(
+      '記録用シートを新規作成しました: ' +
+      SHEET_NAME
+    );
+  }
+
+  return sheet;
+}
+
+/**
+ * LINEへ返信メッセージを送る
+ */
+function replyMessage(replyToken, text) {
+  debugLog('replyMessage 開始');
+
+  var token =
+    PropertiesService
+      .getScriptProperties()
+      .getProperty(
+        'LINE_CHANNEL_ACCESS_TOKEN'
+      );
+
+  if (!token) {
+    debugLog(
+      'エラー: LINE_CHANNEL_ACCESS_TOKEN が設定されていません'
+    );
+
+    return;
+  }
+
+  if (!replyToken) {
+    debugLog(
+      'エラー: replyToken がありません'
+    );
+
+    return;
+  }
+
+  var url =
+    'https://api.line.me/v2/bot/message/reply';
+
+  var payload = {
+    replyToken: replyToken,
+    messages: [
+      {
+        type: 'text',
+        text: text
+      }
+    ]
+  };
+
+  var options = {
+    method: 'post',
+    contentType: 'application/json',
+    headers: {
+      Authorization: 'Bearer ' + token
+    },
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true
+  };
+
+  try {
+    var response =
+      UrlFetchApp.fetch(
+        url,
+        options
+      );
+
+    var statusCode =
+      response.getResponseCode();
+
+    var responseBody =
+      response.getContentText();
+
+    debugLog(
+      'LINE reply status: ' +
+      statusCode
+    );
+
+    debugLog(
+      'LINE reply body: ' +
+      responseBody
+    );
+
+  } catch (err) {
+    debugLog(
+      'replyMessage error: ' +
+      err
+    );
+  }
+}
+
+/**
+ * JSONレスポンスを返す
+ */
+function createJsonResponse(obj) {
+  return ContentService
+    .createTextOutput(
+      JSON.stringify(obj)
+    )
+    .setMimeType(
+      ContentService.MimeType.JSON
+    );
+}
+
+/**
+ * デバッグログを書き出す
+ */
+function debugLog(message) {
+  try {
+    var ss =
+      SpreadsheetApp
+        .getActiveSpreadsheet();
+
+    var sheet =
+      ss.getSheetByName(
+        'debug_log'
+      );
+
+    if (!sheet) {
+      sheet =
+        ss.insertSheet(
+          'debug_log'
+        );
+
+      sheet.appendRow([
+        '日時',
+        '内容'
+      ]);
+    }
+
+    sheet.appendRow([
+      new Date(),
+      message
+    ]);
+
+  } catch (err) {
+    // debugLogでエラーが発生しても
+    // 本処理を止めない
+  }
+}
+
+/**
+ * スプレッドシート書き込みテスト
+ */
+function testAppendRow() {
+  var sheet = getSheet();
+
+  sheet.appendRow([
+    new Date(),
+    '2026/04/11',
+    '北側',
+    '中央',
+    'つつじ',
+    '剪定',
+    '',
+    '',
+    ''
+  ]);
+
+  debugLog(
+    'testAppendRow 完了'
+  );
+}
+
+/**
+ * スクリプトプロパティ確認用
+ */
+function testScriptProperties() {
+  var properties =
+    PropertiesService
+      .getScriptProperties();
+
+  var token =
+    properties.getProperty(
+      'LINE_CHANNEL_ACCESS_TOKEN'
+    );
+
+  var folderId =
+    properties.getProperty(
+      'IMAGE_FOLDER_ID'
+    );
+
+  if (token) {
+    debugLog(
+      'LINE_CHANNEL_ACCESS_TOKEN は設定されています'
+    );
+  } else {
+    debugLog(
+      'LINE_CHANNEL_ACCESS_TOKEN が設定されていません'
+    );
+  }
+
+  if (folderId) {
+    debugLog(
+      'IMAGE_FOLDER_ID は設定されています'
+    );
+  } else {
+    debugLog(
+      'IMAGE_FOLDER_ID が設定されていません'
+    );
+  }
+}
+
+/**
+ * Google Driveへの保存権限確認用
+ */
+function testImageFolderAccess() {
+  var folderId =
+    PropertiesService
+      .getScriptProperties()
+      .getProperty(
+        'IMAGE_FOLDER_ID'
+      );
+
+  if (!folderId) {
+    debugLog(
+      'IMAGE_FOLDER_ID が設定されていません'
+    );
+
+    return;
+  }
+
+  try {
+    var folder =
+      DriveApp.getFolderById(
+        folderId
+      );
+
+    debugLog(
+      '画像フォルダへアクセスできました: ' +
+      folder.getName()
+    );
+
+  } catch (err) {
+    debugLog(
+      '画像フォルダへのアクセスエラー: ' +
+      err
+    );
+  }
+}
+
+/**
+ * 最新の画像未登録行へ
+ * テスト用URLを追加する
+ */
+function testAddImageUrl() {
+  var testImageUrl =
+    'https://drive.google.com/test-image';
+
+  var testFolderUrl =
+    'https://drive.google.com/test-folder';
+
+  var updatedRow =
+    addImageUrlToLatestRecord(
+      testImageUrl,
+      testFolderUrl
+    );
+
+  if (updatedRow) {
+    debugLog(
+      '画像URL追加テスト成功。行番号: ' +
+      updatedRow
+    );
+  } else {
+    debugLog(
+      '画像URL追加テスト失敗。対象行なし'
+    );
+  }
+}
+
+/**
+ * UrlFetchAppの外部通信権限確認用
+ */
+function authorizeUrlFetch() {
+  debugLog(
+    'authorizeUrlFetch 開始'
+  );
+
+  try {
+    var response =
+      UrlFetchApp.fetch(
+        'https://www.google.com',
+        {
+          method: 'get',
+          muteHttpExceptions: true
+        }
+      );
+
+    debugLog(
+      'authorizeUrlFetch status: ' +
+      response.getResponseCode()
+    );
+
+    debugLog(
+      'UrlFetchApp の外部通信権限テスト完了'
+    );
+
+  } catch (err) {
+    debugLog(
+      'authorizeUrlFetch error: ' +
+      err
+    );
+  }
+}
