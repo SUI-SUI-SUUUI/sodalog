@@ -16,7 +16,7 @@
  * 作業日_場所_詳細場所_植物名_作業内容
  *
  * 例：
- * 2026/04/11_北側_中央_つつじ_剪定
+ * 2026/07/11_南側_東かだん_アジサイ_剪定
  */
 
 var SHEET_NAME = "garden_log";
@@ -78,9 +78,14 @@ function doPost(e) {
           return;
         }
 
-        debugLog("対象外メッセージタイプ: " + event.message.type);
+        debugLog(
+          "対象外メッセージタイプ: " +
+            event.message.type,
+        );
       } catch (eventError) {
-        debugLog("イベント処理エラー: " + eventError);
+        debugLog(
+          "イベント処理エラー: " + eventError,
+        );
       }
     });
   } catch (err) {
@@ -111,22 +116,25 @@ function handleTextMessage(event) {
   debugLog("handleTextMessage 開始");
   debugLog("受信テキスト: " + text);
 
-  var parsed = parseText(text);
-  var sheet = getSheet();
+  var validationResult =
+    validateAndParseText(text);
 
-  if (!parsed) {
-    debugLog("入力形式エラー");
+  if (!validationResult.isValid) {
+    debugLog(
+      "入力形式エラー: " +
+        validationResult.errorCode,
+    );
 
     replyMessage(
       replyToken,
-      "形式が正しく読み取れませんでした。\n" +
-        "次の形式で送ってください:\n" +
-        "作業日_場所_詳細場所_植物名_作業内容\n" +
-        "例: 2026/04/11_北側_中央_つつじ_剪定",
+      validationResult.message,
     );
 
     return;
   }
+
+  var parsed = validationResult.data;
+  var sheet = getSheet();
 
   sheet.appendRow([
     new Date(),
@@ -179,17 +187,21 @@ function handleImageMessage(event) {
 
     replyMessage(
       replyToken,
-      "画像を読み取れませんでした。\nもう一度送ってください。",
+      "画像を読み取れませんでした。\n" +
+        "もう一度送ってください。",
     );
 
     return;
   }
 
   try {
-    var latestRecord = getLatestRecordWithoutImage();
+    var latestRecord =
+      getLatestRecordWithoutImage();
 
     if (!latestRecord) {
-      debugLog("画像を追加できる園芸記録がありません");
+      debugLog(
+        "画像を追加できる園芸記録がありません",
+      );
 
       replyMessage(
         replyToken,
@@ -206,7 +218,10 @@ function handleImageMessage(event) {
       latestRecord.detailPlace,
     );
 
-    var file = saveLineImageToDrive(messageId, folder);
+    var file = saveLineImageToDrive(
+      messageId,
+      folder,
+    );
 
     var imageUrl = file.getUrl();
     var folderUrl = folder.getUrl();
@@ -218,10 +233,19 @@ function handleImageMessage(event) {
     );
 
     debugLog("画像保存完了");
-    debugLog("対象行: " + latestRecord.row);
-    debugLog("ファイル名: " + file.getName());
-    debugLog("ファイルURL: " + imageUrl);
-    debugLog("保存先フォルダURL: " + folderUrl);
+    debugLog(
+      "対象行: " + latestRecord.row,
+    );
+    debugLog(
+      "ファイル名: " + file.getName(),
+    );
+    debugLog(
+      "ファイルURL: " + imageUrl,
+    );
+    debugLog(
+      "保存先フォルダURL: " +
+        folderUrl,
+    );
 
     replyMessage(
       replyToken,
@@ -238,9 +262,12 @@ function handleImageMessage(event) {
     );
   } catch (err) {
     debugLog("画像保存エラー: " + err);
+
     debugLog(
       "画像保存エラースタック: " +
-        (err && err.stack ? err.stack : "stackなし"),
+        (err && err.stack
+          ? err.stack
+          : "stackなし"),
     );
 
     replyMessage(
@@ -252,6 +279,210 @@ function handleImageMessage(event) {
 }
 
 /**
+ * テキスト入力を検証し、
+ * 問題がなければ5項目に分解する
+ */
+function validateAndParseText(text) {
+  var inputExample =
+    "入力例：\n" +
+    "2026/07/11_南側_東かだん_アジサイ_剪定";
+
+  if (!text || !String(text).trim()) {
+    return {
+      isValid: false,
+      errorCode: "EMPTY_TEXT",
+      message:
+        "入力内容が空です。\n\n" +
+        "次の5項目を「_」で区切って送ってください。\n\n" +
+        "作業日_場所_詳細場所_植物名_作業内容\n\n" +
+        inputExample,
+    };
+  }
+
+  var parts = String(text)
+    .trim()
+    .split("_");
+
+  if (parts.length !== 5) {
+    return {
+      isValid: false,
+      errorCode: "INVALID_ITEM_COUNT",
+      message:
+        "入力項目を正しく読み取れませんでした。\n\n" +
+        "次の5項目を「_」で区切って送ってください。\n\n" +
+        "作業日_場所_詳細場所_植物名_作業内容\n\n" +
+        "現在の項目数: " +
+        parts.length +
+        "\n\n" +
+        inputExample,
+    };
+  }
+
+  var workDate = parts[0].trim();
+  var place = parts[1].trim();
+  var detailPlace = parts[2].trim();
+  var plant = parts[3].trim();
+  var task = parts[4].trim();
+
+  if (!workDate) {
+    return {
+      isValid: false,
+      errorCode: "EMPTY_WORK_DATE",
+      message:
+        "作業日が入力されていません。\n\n" +
+        "作業日は「2026/07/11」の形式で入力してください。\n\n" +
+        inputExample,
+    };
+  }
+
+  if (!place) {
+    return {
+      isValid: false,
+      errorCode: "EMPTY_PLACE",
+      message:
+        "場所が入力されていません。\n\n" +
+        "例：北側、南側、玄関前\n\n" +
+        inputExample,
+    };
+  }
+
+  if (!detailPlace) {
+    return {
+      isValid: false,
+      errorCode: "EMPTY_DETAIL_PLACE",
+      message:
+        "詳細場所が入力されていません。\n\n" +
+        "例：中央、東かだん、西\n\n" +
+        inputExample,
+    };
+  }
+
+  if (!plant) {
+    return {
+      isValid: false,
+      errorCode: "EMPTY_PLANT",
+      message:
+        "植物名が入力されていません。\n\n" +
+        "例：アジサイ、つつじ、バラ\n\n" +
+        inputExample,
+    };
+  }
+
+  if (!task) {
+    return {
+      isValid: false,
+      errorCode: "EMPTY_TASK",
+      message:
+        "作業内容が入力されていません。\n\n" +
+        "例：剪定、水やり、植え替え\n\n" +
+        inputExample,
+    };
+  }
+
+  if (!isValidDateText(workDate)) {
+    return {
+      isValid: false,
+      errorCode: "INVALID_WORK_DATE",
+      message:
+        "作業日を正しく読み取れませんでした。\n\n" +
+        "「2026/07/11」の形式で、実在する日付を入力してください。\n\n" +
+        inputExample,
+    };
+  }
+
+  return {
+    isValid: true,
+    errorCode: null,
+    message: null,
+    data: {
+      workDate: normalizeDateText(
+        workDate,
+      ),
+      place: place,
+      detailPlace: detailPlace,
+      plant: plant,
+      task: task,
+    },
+  };
+}
+
+/**
+ * 日付文字列が有効か確認する
+ *
+ * 対応形式：
+ * 2026/07/11
+ */
+function isValidDateText(dateText) {
+  if (!dateText) {
+    return false;
+  }
+
+  var match = String(dateText)
+    .trim()
+    .match(
+      /^(\d{4})\/(\d{1,2})\/(\d{1,2})$/,
+    );
+
+  if (!match) {
+    return false;
+  }
+
+  var year = Number(match[1]);
+  var month = Number(match[2]);
+  var day = Number(match[3]);
+
+  if (
+    month < 1 ||
+    month > 12 ||
+    day < 1 ||
+    day > 31
+  ) {
+    return false;
+  }
+
+  var date = new Date(
+    year,
+    month - 1,
+    day,
+  );
+
+  return (
+    date.getFullYear() === year &&
+    date.getMonth() === month - 1 &&
+    date.getDate() === day
+  );
+}
+
+/**
+ * 日付を YYYY/MM/DD 形式へ統一する
+ */
+function normalizeDateText(dateText) {
+  var match = String(dateText)
+    .trim()
+    .match(
+      /^(\d{4})\/(\d{1,2})\/(\d{1,2})$/,
+    );
+
+  if (!match) {
+    return dateText;
+  }
+
+  var year = match[1];
+  var month =
+    ("0" + match[2]).slice(-2);
+  var day =
+    ("0" + match[3]).slice(-2);
+
+  return (
+    year +
+    "/" +
+    month +
+    "/" +
+    day
+  );
+}
+
+/**
  * 画像URLが空欄の最新記録を取得する
  */
 function getLatestRecordWithoutImage() {
@@ -259,7 +490,9 @@ function getLatestRecordWithoutImage() {
   var lastRow = sheet.getLastRow();
 
   if (lastRow < 2) {
-    debugLog("garden_logに記録行がありません");
+    debugLog(
+      "garden_logに記録行がありません",
+    );
 
     return null;
   }
@@ -269,9 +502,16 @@ function getLatestRecordWithoutImage() {
   var detailPlaceColumn = 4;
   var imageUrlColumn = 8;
 
-  for (var row = lastRow; row >= 2; row--) {
+  for (
+    var row = lastRow;
+    row >= 2;
+    row--
+  ) {
     var imageUrl = sheet
-      .getRange(row, imageUrlColumn)
+      .getRange(
+        row,
+        imageUrlColumn,
+      )
       .getValue();
 
     if (imageUrl) {
@@ -279,18 +519,31 @@ function getLatestRecordWithoutImage() {
     }
 
     var workDate = sheet
-      .getRange(row, workDateColumn)
+      .getRange(
+        row,
+        workDateColumn,
+      )
       .getDisplayValue();
 
     var place = sheet
-      .getRange(row, placeColumn)
+      .getRange(
+        row,
+        placeColumn,
+      )
       .getDisplayValue();
 
     var detailPlace = sheet
-      .getRange(row, detailPlaceColumn)
+      .getRange(
+        row,
+        detailPlaceColumn,
+      )
       .getDisplayValue();
 
-    if (!workDate || !place || !detailPlace) {
+    if (
+      !workDate ||
+      !place ||
+      !detailPlace
+    ) {
       debugLog(
         "画像保存先に必要な情報が不足しています。行番号: " +
           row,
@@ -335,7 +588,8 @@ function getOrCreateRecordFolder(
     );
   }
 
-  var dateParts = getYearAndMonth(workDate);
+  var dateParts =
+    getYearAndMonth(workDate);
 
   if (!dateParts) {
     throw new Error(
@@ -344,27 +598,34 @@ function getOrCreateRecordFolder(
     );
   }
 
-  var rootFolder = DriveApp.getFolderById(folderId);
+  var rootFolder =
+    DriveApp.getFolderById(folderId);
 
-  var yearFolder = getOrCreateChildFolder(
-    rootFolder,
-    dateParts.year,
-  );
+  var yearFolder =
+    getOrCreateChildFolder(
+      rootFolder,
+      dateParts.year,
+    );
 
-  var monthFolder = getOrCreateChildFolder(
-    yearFolder,
-    dateParts.month,
-  );
+  var monthFolder =
+    getOrCreateChildFolder(
+      yearFolder,
+      dateParts.month,
+    );
 
-  var placeFolder = getOrCreateChildFolder(
-    monthFolder,
-    sanitizeFolderName(place),
-  );
+  var placeFolder =
+    getOrCreateChildFolder(
+      monthFolder,
+      sanitizeFolderName(place),
+    );
 
-  var detailPlaceFolder = getOrCreateChildFolder(
-    placeFolder,
-    sanitizeFolderName(detailPlace),
-  );
+  var detailPlaceFolder =
+    getOrCreateChildFolder(
+      placeFolder,
+      sanitizeFolderName(
+        detailPlace,
+      ),
+    );
 
   debugLog(
     "画像保存先フォルダ: " +
@@ -382,33 +643,31 @@ function getOrCreateRecordFolder(
 
 /**
  * 作業日から年と月を取得する
- *
- * 対応例：
- * 2026/07/11
- * 2026-07-11
- * 2026.07.11
  */
 function getYearAndMonth(workDate) {
   if (!workDate) {
     return null;
   }
 
-  var normalizedDate = String(workDate)
-    .trim()
-    .replace(/[年月.]/g, "/")
-    .replace(/日/g, "")
-    .replace(/-/g, "/");
+  var normalizedDate =
+    String(workDate)
+      .trim()
+      .replace(/[年月.]/g, "/")
+      .replace(/日/g, "")
+      .replace(/-/g, "/");
 
-  var match = normalizedDate.match(
-    /^(\d{4})\/(\d{1,2})\/(\d{1,2})$/,
-  );
+  var match =
+    normalizedDate.match(
+      /^(\d{4})\/(\d{1,2})\/(\d{1,2})$/,
+    );
 
   if (!match) {
     return null;
   }
 
   var year = match[1];
-  var month = ("0" + match[2]).slice(-2);
+  var month =
+    ("0" + match[2]).slice(-2);
 
   return {
     year: year,
@@ -425,23 +684,30 @@ function getOrCreateChildFolder(
   folderName,
 ) {
   var folders =
-    parentFolder.getFoldersByName(folderName);
+    parentFolder.getFoldersByName(
+      folderName,
+    );
 
   if (folders.hasNext()) {
-    var existingFolder = folders.next();
+    var existingFolder =
+      folders.next();
 
     debugLog(
-      "既存フォルダを使用: " + folderName,
+      "既存フォルダを使用: " +
+        folderName,
     );
 
     return existingFolder;
   }
 
   var newFolder =
-    parentFolder.createFolder(folderName);
+    parentFolder.createFolder(
+      folderName,
+    );
 
   debugLog(
-    "フォルダを新規作成: " + folderName,
+    "フォルダを新規作成: " +
+      folderName,
   );
 
   return newFolder;
@@ -450,14 +716,20 @@ function getOrCreateChildFolder(
 /**
  * Driveフォルダ名として扱いやすい文字列へ変換する
  */
-function sanitizeFolderName(folderName) {
+function sanitizeFolderName(
+  folderName,
+) {
   if (!folderName) {
     return "未設定";
   }
 
-  var sanitized = String(folderName)
-    .trim()
-    .replace(/[\/\\:*?"<>|]/g, "＿");
+  var sanitized =
+    String(folderName)
+      .trim()
+      .replace(
+        /[\/\\:*?"<>|]/g,
+        "＿",
+      );
 
   if (!sanitized) {
     return "未設定";
@@ -502,26 +774,33 @@ function saveLineImageToDrive(
   var options = {
     method: "get",
     headers: {
-      Authorization: "Bearer " + token,
+      Authorization:
+        "Bearer " + token,
     },
     muteHttpExceptions: true,
   };
 
-  var response = UrlFetchApp.fetch(
-    contentUrl,
-    options,
+  var response =
+    UrlFetchApp.fetch(
+      contentUrl,
+      options,
+    );
+
+  var statusCode =
+    response.getResponseCode();
+
+  debugLog(
+    "画像取得 status: " +
+      statusCode,
   );
-
-  var statusCode = response.getResponseCode();
-
-  debugLog("画像取得 status: " + statusCode);
 
   if (statusCode !== 200) {
     var responseBody =
       response.getContentText();
 
     debugLog(
-      "画像取得 body: " + responseBody,
+      "画像取得 body: " +
+        responseBody,
     );
 
     throw new Error(
@@ -531,21 +810,29 @@ function saveLineImageToDrive(
   }
 
   var blob = response.getBlob();
-  var contentType = blob.getContentType();
+  var contentType =
+    blob.getContentType();
 
   debugLog(
-    "画像Content-Type: " + contentType,
+    "画像Content-Type: " +
+      contentType,
   );
 
   var extension =
-    getImageExtension(contentType);
+    getImageExtension(
+      contentType,
+    );
 
   var fileName =
-    createImageFileName(extension);
+    createImageFileName(
+      extension,
+    );
 
   blob.setName(fileName);
 
-  return destinationFolder.createFile(blob);
+  return destinationFolder.createFile(
+    blob,
+  );
 }
 
 /**
@@ -563,31 +850,46 @@ function updateRecordImageInformation(
   var folderUrlColumn = 9;
 
   sheet
-    .getRange(row, imageUrlColumn)
+    .getRange(
+      row,
+      imageUrlColumn,
+    )
     .setValue(imageUrl);
 
   sheet
-    .getRange(row, folderUrlColumn)
+    .getRange(
+      row,
+      folderUrlColumn,
+    )
     .setValue(folderUrl);
 
   debugLog(
-    "画像情報を記録しました。行番号: " + row,
+    "画像情報を記録しました。行番号: " +
+      row,
   );
 }
 
 /**
  * Content-Typeから拡張子を決める
  */
-function getImageExtension(contentType) {
-  if (contentType === "image/png") {
+function getImageExtension(
+  contentType,
+) {
+  if (
+    contentType === "image/png"
+  ) {
     return "png";
   }
 
-  if (contentType === "image/gif") {
+  if (
+    contentType === "image/gif"
+  ) {
     return "gif";
   }
 
-  if (contentType === "image/webp") {
+  if (
+    contentType === "image/webp"
+  ) {
     return "webp";
   }
 
@@ -596,62 +898,44 @@ function getImageExtension(contentType) {
 
 /**
  * 保存する画像のファイル名を作る
- *
- * 例：
- * 20260711_114530_123.jpg
  */
-function createImageFileName(extension) {
-  var timeZone = Session.getScriptTimeZone();
+function createImageFileName(
+  extension,
+) {
+  var timeZone =
+    Session.getScriptTimeZone();
 
-  var dateText = Utilities.formatDate(
-    new Date(),
-    timeZone,
-    "yyyyMMdd_HHmmss_SSS",
-  );
-
-  return dateText + "." + extension;
-}
-
-/**
- * テキストを5項目に分解する
- */
-function parseText(text) {
-  if (!text) {
-    debugLog("parseText: text が空です");
-
-    return null;
-  }
-
-  var parts = text.trim().split("_");
-
-  if (parts.length !== 5) {
-    debugLog(
-      "parseText: 入力項目数エラー。項目数=" +
-        parts.length,
+  var dateText =
+    Utilities.formatDate(
+      new Date(),
+      timeZone,
+      "yyyyMMdd_HHmmss_SSS",
     );
 
-    return null;
-  }
-
-  return {
-    workDate: parts[0].trim(),
-    place: parts[1].trim(),
-    detailPlace: parts[2].trim(),
-    plant: parts[3].trim(),
-    task: parts[4].trim(),
-  };
+  return (
+    dateText +
+    "." +
+    extension
+  );
 }
 
 /**
  * 記録用シートを取得する
  */
 function getSheet() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss =
+    SpreadsheetApp.getActiveSpreadsheet();
 
-  var sheet = ss.getSheetByName(SHEET_NAME);
+  var sheet =
+    ss.getSheetByName(
+      SHEET_NAME,
+    );
 
   if (!sheet) {
-    sheet = ss.insertSheet(SHEET_NAME);
+    sheet =
+      ss.insertSheet(
+        SHEET_NAME,
+      );
 
     sheet.appendRow(HEADER);
 
@@ -667,7 +951,10 @@ function getSheet() {
 /**
  * LINEへ返信メッセージを送る
  */
-function replyMessage(replyToken, text) {
+function replyMessage(
+  replyToken,
+  text,
+) {
   debugLog("replyMessage 開始");
 
   var token =
@@ -706,19 +993,23 @@ function replyMessage(replyToken, text) {
 
   var options = {
     method: "post",
-    contentType: "application/json",
+    contentType:
+      "application/json",
     headers: {
-      Authorization: "Bearer " + token,
+      Authorization:
+        "Bearer " + token,
     },
-    payload: JSON.stringify(payload),
+    payload:
+      JSON.stringify(payload),
     muteHttpExceptions: true,
   };
 
   try {
-    var response = UrlFetchApp.fetch(
-      url,
-      options,
-    );
+    var response =
+      UrlFetchApp.fetch(
+        url,
+        options,
+      );
 
     var statusCode =
       response.getResponseCode();
@@ -727,15 +1018,18 @@ function replyMessage(replyToken, text) {
       response.getContentText();
 
     debugLog(
-      "LINE reply status: " + statusCode,
+      "LINE reply status: " +
+        statusCode,
     );
 
     debugLog(
-      "LINE reply body: " + responseBody,
+      "LINE reply body: " +
+        responseBody,
     );
   } catch (err) {
     debugLog(
-      "replyMessage error: " + err,
+      "replyMessage error: " +
+        err,
     );
   }
 }
@@ -745,7 +1039,9 @@ function replyMessage(replyToken, text) {
  */
 function createJsonResponse(obj) {
   return ContentService
-    .createTextOutput(JSON.stringify(obj))
+    .createTextOutput(
+      JSON.stringify(obj),
+    )
     .setMimeType(
       ContentService.MimeType.JSON,
     );
@@ -760,11 +1056,15 @@ function debugLog(message) {
       SpreadsheetApp.getActiveSpreadsheet();
 
     var sheet =
-      ss.getSheetByName("debug_log");
+      ss.getSheetByName(
+        "debug_log",
+      );
 
     if (!sheet) {
       sheet =
-        ss.insertSheet("debug_log");
+        ss.insertSheet(
+          "debug_log",
+        );
 
       sheet.appendRow([
         "日時",
@@ -800,7 +1100,41 @@ function testAppendRow() {
     "",
   ]);
 
-  debugLog("testAppendRow 完了");
+  debugLog(
+    "testAppendRow 完了",
+  );
+}
+
+/**
+ * 入力チェックテスト
+ */
+function testValidation() {
+  var testCases = [
+    "",
+    "2026/07/11_南側",
+    "2026/13/40_南側_東かだん_アジサイ_剪定",
+    "2026/07/11__東かだん_アジサイ_剪定",
+    "2026/07/11_南側__アジサイ_剪定",
+    "2026/07/11_南側_東かだん__剪定",
+    "2026/07/11_南側_東かだん_アジサイ_",
+    "2026/07/11_南側_東かだん_アジサイ_剪定",
+  ];
+
+  testCases.forEach(
+    function (testText) {
+      var result =
+        validateAndParseText(
+          testText,
+        );
+
+      debugLog(
+        "入力チェックテスト: " +
+          testText +
+          " / 結果: " +
+          JSON.stringify(result),
+      );
+    },
+  );
 }
 
 /**
@@ -860,7 +1194,9 @@ function testImageFolderAccess() {
 
   try {
     var folder =
-      DriveApp.getFolderById(folderId);
+      DriveApp.getFolderById(
+        folderId,
+      );
 
     debugLog(
       "画像フォルダへアクセスできました: " +
@@ -876,14 +1212,6 @@ function testImageFolderAccess() {
 
 /**
  * フォルダ自動作成テスト
- *
- * 実際に次のフォルダを作成する。
- *
- * images
- * └─ 2026
- *    └─ 07
- *       └─ 北側
- *          └─ 中央
  */
 function testCreateRecordFolder() {
   try {
@@ -910,16 +1238,19 @@ function testCreateRecordFolder() {
  * UrlFetchAppの外部通信権限確認用
  */
 function authorizeUrlFetch() {
-  debugLog("authorizeUrlFetch 開始");
+  debugLog(
+    "authorizeUrlFetch 開始",
+  );
 
   try {
-    var response = UrlFetchApp.fetch(
-      "https://www.google.com",
-      {
-        method: "get",
-        muteHttpExceptions: true,
-      },
-    );
+    var response =
+      UrlFetchApp.fetch(
+        "https://www.google.com",
+        {
+          method: "get",
+          muteHttpExceptions: true,
+        },
+      );
 
     debugLog(
       "authorizeUrlFetch status: " +
@@ -931,7 +1262,8 @@ function authorizeUrlFetch() {
     );
   } catch (err) {
     debugLog(
-      "authorizeUrlFetch error: " + err,
+      "authorizeUrlFetch error: " +
+        err,
     );
   }
 }
