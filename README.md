@@ -64,8 +64,8 @@ Google Spreadsheet / Google Drive
 
 ## ドキュメント
 
-- [画像保存フォルダ構成](docs/folder-structure.md)
-- [AI活用ログ](docs/ai-usage-log.md)
+- [画像保存フォルダ構成](my-garden-lab-main/docs/folder-structure.md)
+- [AI活用ログ](my-garden-lab-main/docs/ai-usage-log.md)
 
 ## AI活用
 
@@ -95,7 +95,7 @@ Google Spreadsheet / Google Drive
 - 応募用READMEとProtoPediaページが完成した時
 - 最終デモとプレゼン資料が完成した時
 
-AI活用の詳細は `docs/ai-usage-log.md` に記録しています。
+AI活用の詳細は `my-garden-lab-main/docs/ai-usage-log.md` に記録しています。
 
 ## 開発状況
 
