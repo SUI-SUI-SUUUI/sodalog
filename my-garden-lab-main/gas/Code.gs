@@ -2,8 +2,15 @@
  * My Garden Lab - LINE Webhook
  *
  * LINEで届いたテキストメッセージをスプレッドシートへ記録する。
- * LINEで届いた画像をGoogle Driveのimagesフォルダへ保存する。
- * 保存した画像URLを、最新の園芸記録へ追加する。
+ * LINEで届いた画像をGoogle Driveへ保存する。
+ *
+ * 画像は、最新の園芸記録を参照して次の階層へ保存する。
+ *
+ * images
+ * └─ 年
+ *    └─ 月
+ *       └─ 場所
+ *          └─ 詳細場所
  *
  * テキスト入力形式：
  * 作業日_場所_詳細場所_植物名_作業内容
@@ -35,13 +42,18 @@ function doPost(e) {
 
     if (!e || !e.postData || !e.postData.contents) {
       debugLog("エラー: postData がありません");
-      return createJsonResponse({ status: "no postData" });
+
+      return createJsonResponse({
+        status: "no postData",
+      });
     }
 
     var body = JSON.parse(e.postData.contents);
+
     debugLog("受信body: " + JSON.stringify(body));
 
     var events = body.events || [];
+
     debugLog("events数: " + events.length);
 
     events.forEach(function (event) {
@@ -50,16 +62,19 @@ function doPost(e) {
 
         if (event.type !== "message" || !event.message) {
           debugLog("対象外イベント: " + event.type);
+
           return;
         }
 
         if (event.message.type === "text") {
           handleTextMessage(event);
+
           return;
         }
 
         if (event.message.type === "image") {
           handleImageMessage(event);
+
           return;
         }
 
@@ -72,14 +87,18 @@ function doPost(e) {
     debugLog("doPost error: " + err);
   }
 
-  return createJsonResponse({ status: "ok" });
+  return createJsonResponse({
+    status: "ok",
+  });
 }
 
 /**
  * ブラウザからURLを開いたときの確認用
  */
 function doGet(e) {
-  return ContentService.createTextOutput("My Garden Lab Webhook is running.");
+  return ContentService.createTextOutput(
+    "My Garden Lab Webhook is running.",
+  );
 }
 
 /**
@@ -160,45 +179,69 @@ function handleImageMessage(event) {
 
     replyMessage(
       replyToken,
-      "画像を読み取れませんでした。" + "もう一度送ってください。",
+      "画像を読み取れませんでした。\nもう一度送ってください。",
     );
 
     return;
   }
 
   try {
-    var file = saveLineImageToDrive(messageId);
+    var latestRecord = getLatestRecordWithoutImage();
 
-    var imageUrl = file.getUrl();
-    var folderUrl = getImageFolderUrl();
-
-    debugLog("画像保存完了");
-    debugLog("ファイル名: " + file.getName());
-    debugLog("ファイルURL: " + imageUrl);
-
-    var updatedRow = addImageUrlToLatestRecord(imageUrl, folderUrl);
-
-    if (updatedRow) {
-      debugLog("画像URLを記録しました。行番号: " + updatedRow);
+    if (!latestRecord) {
+      debugLog("画像を追加できる園芸記録がありません");
 
       replyMessage(
         replyToken,
-        "画像を保存し、園芸記録に追加しました。\n" +
-          "ファイル名: " +
-          file.getName(),
-      );
-    } else {
-      debugLog("画像URLを追加できる記録がありません");
-
-      replyMessage(
-        replyToken,
-        "画像はGoogle Driveへ保存しました。\n" +
-          "ただし、画像を追加できる園芸記録が見つかりませんでした。\n" +
+        "画像を追加できる園芸記録が見つかりませんでした。\n" +
           "先に作業内容を送信してください。",
       );
+
+      return;
     }
+
+    var folder = getOrCreateRecordFolder(
+      latestRecord.workDate,
+      latestRecord.place,
+      latestRecord.detailPlace,
+    );
+
+    var file = saveLineImageToDrive(messageId, folder);
+
+    var imageUrl = file.getUrl();
+    var folderUrl = folder.getUrl();
+
+    updateRecordImageInformation(
+      latestRecord.row,
+      imageUrl,
+      folderUrl,
+    );
+
+    debugLog("画像保存完了");
+    debugLog("対象行: " + latestRecord.row);
+    debugLog("ファイル名: " + file.getName());
+    debugLog("ファイルURL: " + imageUrl);
+    debugLog("保存先フォルダURL: " + folderUrl);
+
+    replyMessage(
+      replyToken,
+      "画像を保存し、園芸記録に追加しました。\n" +
+        "保存先: " +
+        latestRecord.workDate +
+        " / " +
+        latestRecord.place +
+        " / " +
+        latestRecord.detailPlace +
+        "\n" +
+        "ファイル名: " +
+        file.getName(),
+    );
   } catch (err) {
     debugLog("画像保存エラー: " + err);
+    debugLog(
+      "画像保存エラースタック: " +
+        (err && err.stack ? err.stack : "stackなし"),
+    );
 
     replyMessage(
       replyToken,
@@ -209,70 +252,9 @@ function handleImageMessage(event) {
 }
 
 /**
- * LINEから画像データを取得し、
- * Google Driveへ保存する
+ * 画像URLが空欄の最新記録を取得する
  */
-function saveLineImageToDrive(messageId) {
-  var scriptProperties = PropertiesService.getScriptProperties();
-
-  var token = scriptProperties.getProperty("LINE_CHANNEL_ACCESS_TOKEN");
-
-  var folderId = scriptProperties.getProperty("IMAGE_FOLDER_ID");
-
-  if (!token) {
-    throw new Error("LINE_CHANNEL_ACCESS_TOKEN が設定されていません");
-  }
-
-  if (!folderId) {
-    throw new Error("IMAGE_FOLDER_ID が設定されていません");
-  }
-
-  var contentUrl =
-    "https://api-data.line.me/v2/bot/message/" + messageId + "/content";
-
-  var options = {
-    method: "get",
-    headers: {
-      Authorization: "Bearer " + token,
-    },
-    muteHttpExceptions: true,
-  };
-
-  var response = UrlFetchApp.fetch(contentUrl, options);
-
-  var statusCode = response.getResponseCode();
-
-  debugLog("画像取得 status: " + statusCode);
-
-  if (statusCode !== 200) {
-    var responseBody = response.getContentText();
-
-    debugLog("画像取得 body: " + responseBody);
-
-    throw new Error("LINEからの画像取得に失敗しました。status=" + statusCode);
-  }
-
-  var blob = response.getBlob();
-  var contentType = blob.getContentType();
-
-  debugLog("画像Content-Type: " + contentType);
-
-  var extension = getImageExtension(contentType);
-
-  var fileName = createImageFileName(extension);
-
-  blob.setName(fileName);
-
-  var folder = DriveApp.getFolderById(folderId);
-
-  return folder.createFile(blob);
-}
-
-/**
- * 保存した画像URLを、
- * 画像URLが空欄の最新記録へ追加する
- */
-function addImageUrlToLatestRecord(imageUrl, folderUrl) {
+function getLatestRecordWithoutImage() {
   var sheet = getSheet();
   var lastRow = sheet.getLastRow();
 
@@ -282,38 +264,315 @@ function addImageUrlToLatestRecord(imageUrl, folderUrl) {
     return null;
   }
 
+  var workDateColumn = 2;
+  var placeColumn = 3;
+  var detailPlaceColumn = 4;
   var imageUrlColumn = 8;
-  var folderUrlColumn = 9;
 
   for (var row = lastRow; row >= 2; row--) {
-    var imageCell = sheet.getRange(row, imageUrlColumn);
+    var imageUrl = sheet
+      .getRange(row, imageUrlColumn)
+      .getValue();
 
-    var currentImageUrl = imageCell.getValue();
-
-    if (!currentImageUrl) {
-      imageCell.setValue(imageUrl);
-
-      sheet.getRange(row, folderUrlColumn).setValue(folderUrl);
-
-      return row;
+    if (imageUrl) {
+      continue;
     }
+
+    var workDate = sheet
+      .getRange(row, workDateColumn)
+      .getDisplayValue();
+
+    var place = sheet
+      .getRange(row, placeColumn)
+      .getDisplayValue();
+
+    var detailPlace = sheet
+      .getRange(row, detailPlaceColumn)
+      .getDisplayValue();
+
+    if (!workDate || !place || !detailPlace) {
+      debugLog(
+        "画像保存先に必要な情報が不足しています。行番号: " +
+          row,
+      );
+
+      continue;
+    }
+
+    return {
+      row: row,
+      workDate: workDate,
+      place: place,
+      detailPlace: detailPlace,
+    };
   }
 
   return null;
 }
 
 /**
- * imagesフォルダのURLを取得する
+ * 作業記録に対応する保存先フォルダを取得する
+ *
+ * images
+ * └─ 年
+ *    └─ 月
+ *       └─ 場所
+ *          └─ 詳細場所
  */
-function getImageFolderUrl() {
+function getOrCreateRecordFolder(
+  workDate,
+  place,
+  detailPlace,
+) {
   var folderId =
-    PropertiesService.getScriptProperties().getProperty("IMAGE_FOLDER_ID");
+    PropertiesService.getScriptProperties().getProperty(
+      "IMAGE_FOLDER_ID",
+    );
 
   if (!folderId) {
-    throw new Error("IMAGE_FOLDER_ID が設定されていません");
+    throw new Error(
+      "IMAGE_FOLDER_ID が設定されていません",
+    );
   }
 
-  return DriveApp.getFolderById(folderId).getUrl();
+  var dateParts = getYearAndMonth(workDate);
+
+  if (!dateParts) {
+    throw new Error(
+      "作業日から年と月を取得できませんでした: " +
+        workDate,
+    );
+  }
+
+  var rootFolder = DriveApp.getFolderById(folderId);
+
+  var yearFolder = getOrCreateChildFolder(
+    rootFolder,
+    dateParts.year,
+  );
+
+  var monthFolder = getOrCreateChildFolder(
+    yearFolder,
+    dateParts.month,
+  );
+
+  var placeFolder = getOrCreateChildFolder(
+    monthFolder,
+    sanitizeFolderName(place),
+  );
+
+  var detailPlaceFolder = getOrCreateChildFolder(
+    placeFolder,
+    sanitizeFolderName(detailPlace),
+  );
+
+  debugLog(
+    "画像保存先フォルダ: " +
+      dateParts.year +
+      "/" +
+      dateParts.month +
+      "/" +
+      place +
+      "/" +
+      detailPlace,
+  );
+
+  return detailPlaceFolder;
+}
+
+/**
+ * 作業日から年と月を取得する
+ *
+ * 対応例：
+ * 2026/07/11
+ * 2026-07-11
+ * 2026.07.11
+ */
+function getYearAndMonth(workDate) {
+  if (!workDate) {
+    return null;
+  }
+
+  var normalizedDate = String(workDate)
+    .trim()
+    .replace(/[年月.]/g, "/")
+    .replace(/日/g, "")
+    .replace(/-/g, "/");
+
+  var match = normalizedDate.match(
+    /^(\d{4})\/(\d{1,2})\/(\d{1,2})$/,
+  );
+
+  if (!match) {
+    return null;
+  }
+
+  var year = match[1];
+  var month = ("0" + match[2]).slice(-2);
+
+  return {
+    year: year,
+    month: month,
+  };
+}
+
+/**
+ * 親フォルダ内から同名フォルダを探す。
+ * なければ新しく作成する。
+ */
+function getOrCreateChildFolder(
+  parentFolder,
+  folderName,
+) {
+  var folders =
+    parentFolder.getFoldersByName(folderName);
+
+  if (folders.hasNext()) {
+    var existingFolder = folders.next();
+
+    debugLog(
+      "既存フォルダを使用: " + folderName,
+    );
+
+    return existingFolder;
+  }
+
+  var newFolder =
+    parentFolder.createFolder(folderName);
+
+  debugLog(
+    "フォルダを新規作成: " + folderName,
+  );
+
+  return newFolder;
+}
+
+/**
+ * Driveフォルダ名として扱いやすい文字列へ変換する
+ */
+function sanitizeFolderName(folderName) {
+  if (!folderName) {
+    return "未設定";
+  }
+
+  var sanitized = String(folderName)
+    .trim()
+    .replace(/[\/\\:*?"<>|]/g, "＿");
+
+  if (!sanitized) {
+    return "未設定";
+  }
+
+  return sanitized;
+}
+
+/**
+ * LINEから画像データを取得し、
+ * 指定されたGoogle Driveフォルダへ保存する
+ */
+function saveLineImageToDrive(
+  messageId,
+  destinationFolder,
+) {
+  var scriptProperties =
+    PropertiesService.getScriptProperties();
+
+  var token =
+    scriptProperties.getProperty(
+      "LINE_CHANNEL_ACCESS_TOKEN",
+    );
+
+  if (!token) {
+    throw new Error(
+      "LINE_CHANNEL_ACCESS_TOKEN が設定されていません",
+    );
+  }
+
+  if (!destinationFolder) {
+    throw new Error(
+      "画像保存先フォルダが指定されていません",
+    );
+  }
+
+  var contentUrl =
+    "https://api-data.line.me/v2/bot/message/" +
+    messageId +
+    "/content";
+
+  var options = {
+    method: "get",
+    headers: {
+      Authorization: "Bearer " + token,
+    },
+    muteHttpExceptions: true,
+  };
+
+  var response = UrlFetchApp.fetch(
+    contentUrl,
+    options,
+  );
+
+  var statusCode = response.getResponseCode();
+
+  debugLog("画像取得 status: " + statusCode);
+
+  if (statusCode !== 200) {
+    var responseBody =
+      response.getContentText();
+
+    debugLog(
+      "画像取得 body: " + responseBody,
+    );
+
+    throw new Error(
+      "LINEからの画像取得に失敗しました。status=" +
+        statusCode,
+    );
+  }
+
+  var blob = response.getBlob();
+  var contentType = blob.getContentType();
+
+  debugLog(
+    "画像Content-Type: " + contentType,
+  );
+
+  var extension =
+    getImageExtension(contentType);
+
+  var fileName =
+    createImageFileName(extension);
+
+  blob.setName(fileName);
+
+  return destinationFolder.createFile(blob);
+}
+
+/**
+ * 指定した記録行へ画像URLと
+ * DriveフォルダURLを追加する
+ */
+function updateRecordImageInformation(
+  row,
+  imageUrl,
+  folderUrl,
+) {
+  var sheet = getSheet();
+
+  var imageUrlColumn = 8;
+  var folderUrlColumn = 9;
+
+  sheet
+    .getRange(row, imageUrlColumn)
+    .setValue(imageUrl);
+
+  sheet
+    .getRange(row, folderUrlColumn)
+    .setValue(folderUrl);
+
+  debugLog(
+    "画像情報を記録しました。行番号: " + row,
+  );
 }
 
 /**
@@ -339,7 +598,7 @@ function getImageExtension(contentType) {
  * 保存する画像のファイル名を作る
  *
  * 例：
- * 20260710_114530_123.jpg
+ * 20260711_114530_123.jpg
  */
 function createImageFileName(extension) {
   var timeZone = Session.getScriptTimeZone();
@@ -366,17 +625,20 @@ function parseText(text) {
   var parts = text.trim().split("_");
 
   if (parts.length !== 5) {
-    debugLog("parseText: 入力項目数エラー。項目数=" + parts.length);
+    debugLog(
+      "parseText: 入力項目数エラー。項目数=" +
+        parts.length,
+    );
 
     return null;
   }
 
   return {
-    workDate: parts[0],
-    place: parts[1],
-    detailPlace: parts[2],
-    plant: parts[3],
-    task: parts[4],
+    workDate: parts[0].trim(),
+    place: parts[1].trim(),
+    detailPlace: parts[2].trim(),
+    plant: parts[3].trim(),
+    task: parts[4].trim(),
   };
 }
 
@@ -393,7 +655,10 @@ function getSheet() {
 
     sheet.appendRow(HEADER);
 
-    debugLog("記録用シートを新規作成しました: " + SHEET_NAME);
+    debugLog(
+      "記録用シートを新規作成しました: " +
+        SHEET_NAME,
+    );
   }
 
   return sheet;
@@ -405,23 +670,29 @@ function getSheet() {
 function replyMessage(replyToken, text) {
   debugLog("replyMessage 開始");
 
-  var token = PropertiesService.getScriptProperties().getProperty(
-    "LINE_CHANNEL_ACCESS_TOKEN",
-  );
+  var token =
+    PropertiesService.getScriptProperties().getProperty(
+      "LINE_CHANNEL_ACCESS_TOKEN",
+    );
 
   if (!token) {
-    debugLog("エラー: LINE_CHANNEL_ACCESS_TOKEN が設定されていません");
+    debugLog(
+      "エラー: LINE_CHANNEL_ACCESS_TOKEN が設定されていません",
+    );
 
     return;
   }
 
   if (!replyToken) {
-    debugLog("エラー: replyToken がありません");
+    debugLog(
+      "エラー: replyToken がありません",
+    );
 
     return;
   }
 
-  var url = "https://api.line.me/v2/bot/message/reply";
+  var url =
+    "https://api.line.me/v2/bot/message/reply";
 
   var payload = {
     replyToken: replyToken,
@@ -444,17 +715,28 @@ function replyMessage(replyToken, text) {
   };
 
   try {
-    var response = UrlFetchApp.fetch(url, options);
+    var response = UrlFetchApp.fetch(
+      url,
+      options,
+    );
 
-    var statusCode = response.getResponseCode();
+    var statusCode =
+      response.getResponseCode();
 
-    var responseBody = response.getContentText();
+    var responseBody =
+      response.getContentText();
 
-    debugLog("LINE reply status: " + statusCode);
+    debugLog(
+      "LINE reply status: " + statusCode,
+    );
 
-    debugLog("LINE reply body: " + responseBody);
+    debugLog(
+      "LINE reply body: " + responseBody,
+    );
   } catch (err) {
-    debugLog("replyMessage error: " + err);
+    debugLog(
+      "replyMessage error: " + err,
+    );
   }
 }
 
@@ -462,9 +744,11 @@ function replyMessage(replyToken, text) {
  * JSONレスポンスを返す
  */
 function createJsonResponse(obj) {
-  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(
-    ContentService.MimeType.JSON,
-  );
+  return ContentService
+    .createTextOutput(JSON.stringify(obj))
+    .setMimeType(
+      ContentService.MimeType.JSON,
+    );
 }
 
 /**
@@ -472,17 +756,26 @@ function createJsonResponse(obj) {
  */
 function debugLog(message) {
   try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss =
+      SpreadsheetApp.getActiveSpreadsheet();
 
-    var sheet = ss.getSheetByName("debug_log");
+    var sheet =
+      ss.getSheetByName("debug_log");
 
     if (!sheet) {
-      sheet = ss.insertSheet("debug_log");
+      sheet =
+        ss.insertSheet("debug_log");
 
-      sheet.appendRow(["日時", "内容"]);
+      sheet.appendRow([
+        "日時",
+        "内容",
+      ]);
     }
 
-    sheet.appendRow([new Date(), message]);
+    sheet.appendRow([
+      new Date(),
+      message,
+    ]);
   } catch (err) {
     // debugLogでエラーが発生しても
     // 本処理を止めない
@@ -497,7 +790,7 @@ function testAppendRow() {
 
   sheet.appendRow([
     new Date(),
-    "2026/04/11",
+    "2026/07/11",
     "北側",
     "中央",
     "つつじ",
@@ -514,22 +807,37 @@ function testAppendRow() {
  * スクリプトプロパティ確認用
  */
 function testScriptProperties() {
-  var properties = PropertiesService.getScriptProperties();
+  var properties =
+    PropertiesService.getScriptProperties();
 
-  var token = properties.getProperty("LINE_CHANNEL_ACCESS_TOKEN");
+  var token =
+    properties.getProperty(
+      "LINE_CHANNEL_ACCESS_TOKEN",
+    );
 
-  var folderId = properties.getProperty("IMAGE_FOLDER_ID");
+  var folderId =
+    properties.getProperty(
+      "IMAGE_FOLDER_ID",
+    );
 
   if (token) {
-    debugLog("LINE_CHANNEL_ACCESS_TOKEN は設定されています");
+    debugLog(
+      "LINE_CHANNEL_ACCESS_TOKEN は設定されています",
+    );
   } else {
-    debugLog("LINE_CHANNEL_ACCESS_TOKEN が設定されていません");
+    debugLog(
+      "LINE_CHANNEL_ACCESS_TOKEN が設定されていません",
+    );
   }
 
   if (folderId) {
-    debugLog("IMAGE_FOLDER_ID は設定されています");
+    debugLog(
+      "IMAGE_FOLDER_ID は設定されています",
+    );
   } else {
-    debugLog("IMAGE_FOLDER_ID が設定されていません");
+    debugLog(
+      "IMAGE_FOLDER_ID が設定されていません",
+    );
   }
 }
 
@@ -538,38 +846,63 @@ function testScriptProperties() {
  */
 function testImageFolderAccess() {
   var folderId =
-    PropertiesService.getScriptProperties().getProperty("IMAGE_FOLDER_ID");
+    PropertiesService.getScriptProperties().getProperty(
+      "IMAGE_FOLDER_ID",
+    );
 
   if (!folderId) {
-    debugLog("IMAGE_FOLDER_ID が設定されていません");
+    debugLog(
+      "IMAGE_FOLDER_ID が設定されていません",
+    );
 
     return;
   }
 
   try {
-    var folder = DriveApp.getFolderById(folderId);
+    var folder =
+      DriveApp.getFolderById(folderId);
 
-    debugLog("画像フォルダへアクセスできました: " + folder.getName());
+    debugLog(
+      "画像フォルダへアクセスできました: " +
+        folder.getName(),
+    );
   } catch (err) {
-    debugLog("画像フォルダへのアクセスエラー: " + err);
+    debugLog(
+      "画像フォルダへのアクセスエラー: " +
+        err,
+    );
   }
 }
 
 /**
- * 最新の画像未登録行へ
- * テスト用URLを追加する
+ * フォルダ自動作成テスト
+ *
+ * 実際に次のフォルダを作成する。
+ *
+ * images
+ * └─ 2026
+ *    └─ 07
+ *       └─ 北側
+ *          └─ 中央
  */
-function testAddImageUrl() {
-  var testImageUrl = "https://drive.google.com/test-image";
+function testCreateRecordFolder() {
+  try {
+    var folder =
+      getOrCreateRecordFolder(
+        "2026/07/11",
+        "北側",
+        "中央",
+      );
 
-  var testFolderUrl = "https://drive.google.com/test-folder";
-
-  var updatedRow = addImageUrlToLatestRecord(testImageUrl, testFolderUrl);
-
-  if (updatedRow) {
-    debugLog("画像URL追加テスト成功。行番号: " + updatedRow);
-  } else {
-    debugLog("画像URL追加テスト失敗。対象行なし");
+    debugLog(
+      "フォルダ自動作成テスト成功: " +
+        folder.getUrl(),
+    );
+  } catch (err) {
+    debugLog(
+      "フォルダ自動作成テスト失敗: " +
+        err,
+    );
   }
 }
 
@@ -580,15 +913,25 @@ function authorizeUrlFetch() {
   debugLog("authorizeUrlFetch 開始");
 
   try {
-    var response = UrlFetchApp.fetch("https://www.google.com", {
-      method: "get",
-      muteHttpExceptions: true,
-    });
+    var response = UrlFetchApp.fetch(
+      "https://www.google.com",
+      {
+        method: "get",
+        muteHttpExceptions: true,
+      },
+    );
 
-    debugLog("authorizeUrlFetch status: " + response.getResponseCode());
+    debugLog(
+      "authorizeUrlFetch status: " +
+        response.getResponseCode(),
+    );
 
-    debugLog("UrlFetchApp の外部通信権限テスト完了");
+    debugLog(
+      "UrlFetchApp の外部通信権限テスト完了",
+    );
   } catch (err) {
-    debugLog("authorizeUrlFetch error: " + err);
+    debugLog(
+      "authorizeUrlFetch error: " + err,
+    );
   }
 }
