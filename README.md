@@ -23,6 +23,7 @@ My Garden Labでは、普段使っているLINEを入口にすることで、庭
 ```text
 2026/04/11_北側_中央_つつじ_剪定
 ```
+
 ## 現在できること
 
 - LINEから作業内容を送信
@@ -70,9 +71,29 @@ Google Spreadsheet / Google Drive
 
 本プロジェクトでは、生成AIを開発補助として活用しています。
 
-- ChatGPT：仕様整理、README作成、説明文整理、作業手順の整理
-- Claude：Google Apps Script実装補助、コード整理
-- Gemini：Google Workspaceまわりの仕様確認
+# ChatGPT：開発の中心
+
+- 次に作る機能の整理
+- GASコードの作成と修正
+- エラー原因の切り分け
+- READMEや応募文の作成
+- EDD審査項目との照合
+- ユーザー価値の言語化
+
+# Cursor：コード作業の場所
+
+- GitHubリポジトリを開く
+- ファイル全体を確認する
+- ChatGPTのコードを反映する
+- 変更差分を見る
+- GitHubへ保存する
+
+# Claudeなど：節目だけの第三者レビュー
+
+- 毎回は使わない。以下のタイミングで利用想定。
+- LINEのテキスト・画像保存が完成した時
+- 応募用READMEとProtoPediaページが完成した時
+- 最終デモとプレゼン資料が完成した時
 
 AI活用の詳細は `docs/ai-usage-log.md` に記録しています。
 
@@ -87,4 +108,3 @@ LINE → Google Apps Script → Googleスプレッドシート記録 → LINE返
 ```
 
 次の実装予定は、LINEから送信した画像をGoogle Driveへ保存し、スプレッドシートの 画像URL 列に記録する機能です。
-
