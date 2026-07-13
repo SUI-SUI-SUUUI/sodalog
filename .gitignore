@@ -1,0 +1,39 @@
+# --- 機密情報・ローカル設定 ---
+.env
+.env.*
+!.env.example
+
+config.gs
+**/gas/config.gs
+
+credentials.json
+service-account*.json
+*.pem
+*.key
+*.p12
+secrets.json
+
+# Google Apps Script（clasp 利用時）
+.clasp.json
+.claspignore
+
+# --- リポジトリ外で管理する重複コピー ---
+my-garden-lab-2026/
+
+# --- OS / エディタ ---
+.DS_Store
+Thumbs.db
+desktop.ini
+
+.vscode/
+!.vscode/extensions.json
+.cursor/
+
+# --- ログ・一時ファイル ---
+*.log
+*.tmp
+*.bak
+*~
+
+# --- 依存関係（将来追加時） ---
+node_modules/
