@@ -25,7 +25,17 @@ function handleImageMessage(event) {
     return;
   }
 
+  var lock = LockService.getScriptLock();
+
   try {
+    if (!lock.tryLock(10000)) {
+      replyMessage(
+        replyToken,
+        "画像の保存処理が混み合っています。\n少し待ってから、もう一度送ってください。",
+      );
+      return;
+    }
+
     var latestRecord = getLatestRecordWithoutImage(userId);
 
     if (!latestRecord) {
@@ -70,8 +80,12 @@ function handleImageMessage(event) {
     replyMessage(
       replyToken,
       "画像を保存できませんでした。\n" +
-        "時間をおいて、もう一度送ってください。",
+      "時間をおいて、もう一度送ってください。",
     );
+  } finally {
+    if (lock.hasLock()) {
+      lock.releaseLock();
+    }
   }
 }
 
@@ -89,6 +103,9 @@ function getLatestRecordWithoutImage(userId) {
 
   var imageUrlColumn = 8;
   var userIdColumn = 10;
+  var createdAtColumn = 1;
+  var imageAttachLimitMilliseconds = 30 * 60 * 1000;
+  var now = new Date().getTime();
 
   for (var row = lastRow; row >= 2; row--) {
     var recordUserId = sheet.getRange(row, userIdColumn).getDisplayValue();
@@ -100,6 +117,16 @@ function getLatestRecordWithoutImage(userId) {
     var imageUrl = sheet.getRange(row, imageUrlColumn).getValue();
 
     if (imageUrl) {
+      continue;
+    }
+
+    var createdAt = sheet.getRange(row, createdAtColumn).getValue();
+
+    if (!(createdAt instanceof Date)) {
+      continue;
+    }
+
+    if (now - createdAt.getTime() > imageAttachLimitMilliseconds) {
       continue;
     }
 
@@ -135,30 +162,31 @@ function getOrCreateRecordFolder(workDate, place, detailPlace) {
     throw new Error("IMAGE_FOLDER_ID が設定されていません");
   }
 
-  var dateParts = getYearAndMonth(workDate);
+  var year = getYearFromWorkDate(workDate);
 
-  if (!dateParts) {
-    throw new Error("作業日から年と月を取得できませんでした");
+  if (!year) {
+    throw new Error("作業日から年を取得できませんでした");
   }
 
   var rootFolder = DriveApp.getFolderById(folderId);
 
-  var yearFolder = getOrCreateChildFolder(rootFolder, dateParts.year);
-
-  var monthFolder = getOrCreateChildFolder(yearFolder, dateParts.month);
-
   var placeFolder = getOrCreateChildFolder(
-    monthFolder,
+    rootFolder,
     sanitizeFolderName(place),
   );
 
-  return getOrCreateChildFolder(placeFolder, sanitizeFolderName(detailPlace));
+  var detailPlaceFolder = getOrCreateChildFolder(
+    placeFolder,
+    sanitizeFolderName(detailPlace),
+  );
+
+  return getOrCreateChildFolder(detailPlaceFolder, year);
 }
 
 /**
- * 年月を取得する
+ * 年を取得する
  */
-function getYearAndMonth(workDate) {
+function getYearFromWorkDate(workDate) {
   var match = String(workDate)
     .trim()
     .match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/);
@@ -167,10 +195,7 @@ function getYearAndMonth(workDate) {
     return null;
   }
 
-  return {
-    year: match[1],
-    month: ("0" + match[2]).slice(-2),
-  };
+  return match[1];
 }
 
 /**
@@ -199,38 +224,6 @@ function sanitizeFolderName(folderName) {
       .trim()
       .replace(/[\/\\:*?"<>|]/g, "＿") || "未設定"
   );
-}
-
-/**
- * LINE画像をDriveへ保存する
- */
-function saveLineImageToDrive(messageId, destinationFolder) {
-  var token = PropertiesService.getScriptProperties().getProperty(
-    "LINE_CHANNEL_ACCESS_TOKEN",
-  );
-
-  var contentUrl =
-    "https://api-data.line.me/v2/bot/message/" + messageId + "/content";
-
-  var response = UrlFetchApp.fetch(contentUrl, {
-    method: "get",
-    headers: {
-      Authorization: "Bearer " + token,
-    },
-    muteHttpExceptions: true,
-  });
-
-  if (response.getResponseCode() !== 200) {
-    throw new Error("LINEからの画像取得に失敗しました");
-  }
-
-  var blob = response.getBlob();
-
-  var extension = getImageExtension(blob.getContentType());
-
-  blob.setName(createImageFileName(extension));
-
-  return destinationFolder.createFile(blob);
 }
 
 /**

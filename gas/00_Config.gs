@@ -1,5 +1,5 @@
 /**
- * My Garden Lab - LINE Webhook
+ * そだログ - LINE Webhook
  */
 
 var SHEET_NAME = "garden_log";

@@ -27,6 +27,28 @@ function getSheet() {
 }
 
 /**
+ * LINE由来の文字列がスプレッドシートの数式として実行されるのを防ぐ
+ */
+function escapeSpreadsheetFormula(value) {
+  if (typeof value !== "string") {
+    return value;
+  }
+
+  if (/^[=+\-@]/.test(value)) {
+    return "'" + value;
+  }
+
+  return value;
+}
+
+/**
+ * 行データ内の文字列を安全にする
+ */
+function escapeSpreadsheetRow(rowData) {
+  return rowData.map(escapeSpreadsheetFormula);
+}
+
+/**
  * 既存のgarden_logへ不足している見出しを追加する
  */
 function ensureGardenLogHeader(
@@ -183,7 +205,7 @@ function saveUserSession(
   var existingSession =
     getUserSession(userId);
 
-  var rowData = [
+  var rowData = escapeSpreadsheetRow([
     userId,
     sessionData.step || "",
     sessionData.workDate || "",
@@ -194,7 +216,7 @@ function saveUserSession(
     sessionData.workType || "",
     sessionData.memo || "",
     new Date(),
-  ];
+  ]);
 
   if (existingSession) {
     sheet

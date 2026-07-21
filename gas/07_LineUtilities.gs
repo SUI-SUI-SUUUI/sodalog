@@ -59,7 +59,7 @@ function debugLog(message) {
       sheet.appendRow(["日時", "内容"]);
     }
 
-    sheet.appendRow([new Date(), message]);
+    sheet.appendRow([new Date(), escapeSpreadsheetFormula(message)]);
   } catch (err) {
     // ログエラーで本処理を止めない
   }

@@ -58,7 +58,7 @@ function doPost(e) {
  */
 function doGet(e) {
   return ContentService.createTextOutput(
-    "My Garden Lab Webhook is running."
+    "そだログ Webhook is running."
   );
 }
 
@@ -189,7 +189,7 @@ function handleTextMessage(event) {
 
   var sheet = getSheet();
 
-  sheet.appendRow([
+  sheet.appendRow(escapeSpreadsheetRow([
     new Date(),
     parsed.workDate,
     parsed.place,
@@ -201,7 +201,7 @@ function handleTextMessage(event) {
     "",
     userId,
     "",
-  ]);
+  ]));
 
   debugLog(
     "スプレッドシートへの記録完了"

@@ -1,5 +1,5 @@
 /**
- * My Garden Labの使い方をLINEへ返信する
+ * そだログの使い方をLINEへ返信する
  */
 function replyHelpMessage(
   replyToken
@@ -7,7 +7,7 @@ function replyHelpMessage(
   replyMessage(
     replyToken,
     [
-      "My Garden Labの使い方",
+      "そだログの使い方",
       "",
       "【園芸記録を追加】",
       "「記録する」と送ってください。",

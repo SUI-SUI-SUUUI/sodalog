@@ -1238,7 +1238,7 @@ function saveGardenLogFromSession(
 ) {
   var sheet = getSheet();
 
-  sheet.appendRow([
+  sheet.appendRow(escapeSpreadsheetRow([
     new Date(),
     session.workDate,
     session.place,
@@ -1250,7 +1250,7 @@ function saveGardenLogFromSession(
     "",
     userId,
     session.base,
-  ]);
+  ]));
 
   debugLog(
     "番号選択式の園芸記録を保存しました: " +

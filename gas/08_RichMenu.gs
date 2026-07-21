@@ -1,5 +1,5 @@
 /**
- * My Garden Lab - リッチメニュー管理
+ * そだログ - リッチメニュー管理
  *
  * 事前準備：
  * 1. my_garden_lab_richmenu_2500x843.png をGoogle Driveへアップロード
@@ -46,7 +46,7 @@ function createMyGardenLabRichMenu() {
       height: 843,
     },
     selected: true,
-    name: "My Garden Lab メインメニュー",
+    name: "そだログ メインメニュー",
     chatBarText: "メニュー",
     areas: [
       {
