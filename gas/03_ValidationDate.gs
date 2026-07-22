@@ -126,3 +126,62 @@ function normalizeDateText(dateText) {
     ("0" + match[3]).slice(-2)
   );
 }
+
+/**
+ * 作業日を利用者向けの日本語表記にする
+ * 例：2026年7月22日（水）
+ */
+function formatWorkDateForDisplay(workDate) {
+  if (!workDate) {
+    return "";
+  }
+
+  var dateText;
+
+  if (
+    Object.prototype.toString.call(workDate) === "[object Date]" &&
+    !isNaN(workDate.getTime())
+  ) {
+    dateText = Utilities.formatDate(
+      workDate,
+      Session.getScriptTimeZone(),
+      "yyyy/MM/dd",
+    );
+  } else {
+    dateText = normalizeDateText(workDate);
+  }
+
+  var match = String(dateText)
+    .trim()
+    .match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/);
+
+  if (!match) {
+    return String(workDate);
+  }
+
+  var year = Number(match[1]);
+  var month = Number(match[2]);
+  var day = Number(match[3]);
+  var date = new Date(year, month - 1, day);
+
+  var weekdayNames = [
+    "日",
+    "月",
+    "火",
+    "水",
+    "木",
+    "金",
+    "土",
+  ];
+
+  return (
+    year +
+    "年" +
+    month +
+    "月" +
+    day +
+    "日（" +
+    weekdayNames[date.getDay()] +
+    "）"
+  );
+}

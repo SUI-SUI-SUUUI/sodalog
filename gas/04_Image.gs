@@ -53,7 +53,13 @@ function handleImageMessage(event) {
       latestRecord.detailPlace,
     );
 
-    var file = saveLineImageToDrive(messageId, folder);
+    var file = saveLineImageToDrive(
+      messageId,
+      folder,
+      latestRecord.workDate,
+      latestRecord.plant,
+      latestRecord.task,
+    );
 
     updateRecordImageInformation(
       latestRecord.row,
@@ -65,7 +71,7 @@ function handleImageMessage(event) {
       replyToken,
       "画像を保存し、園芸記録に追加しました。\n" +
         "保存先: " +
-        latestRecord.workDate +
+        formatWorkDateForDisplay(latestRecord.workDate) +
         " / " +
         latestRecord.place +
         " / " +
@@ -80,7 +86,7 @@ function handleImageMessage(event) {
     replyMessage(
       replyToken,
       "画像を保存できませんでした。\n" +
-      "時間をおいて、もう一度送ってください。",
+        "時間をおいて、もう一度送ってください。",
     );
   } finally {
     if (lock.hasLock()) {
@@ -136,7 +142,11 @@ function getLatestRecordWithoutImage(userId) {
 
     var detailPlace = sheet.getRange(row, 4).getDisplayValue();
 
-    if (!workDate || !place || !detailPlace) {
+    var plant = sheet.getRange(row, 5).getDisplayValue();
+
+    var task = sheet.getRange(row, 6).getDisplayValue();
+
+    if (!workDate || !place || !detailPlace || !plant || !task) {
       continue;
     }
 
@@ -145,6 +155,8 @@ function getLatestRecordWithoutImage(userId) {
       workDate: workDate,
       place: place,
       detailPlace: detailPlace,
+      plant: plant,
+      task: task,
     };
   }
 
@@ -229,7 +241,13 @@ function sanitizeFolderName(folderName) {
 /**
  * LINE画像をDriveへ保存する
  */
-function saveLineImageToDrive(messageId, destinationFolder) {
+function saveLineImageToDrive(
+  messageId,
+  destinationFolder,
+  workDate,
+  plant,
+  task,
+) {
   var token = PropertiesService.getScriptProperties().getProperty(
     "LINE_CHANNEL_ACCESS_TOKEN",
   );
@@ -253,7 +271,9 @@ function saveLineImageToDrive(messageId, destinationFolder) {
 
   var extension = getImageExtension(blob.getContentType());
 
-  blob.setName(createImageFileName(extension));
+  blob.setName(
+    createImageFileName(destinationFolder, workDate, plant, task, extension),
+  );
 
   return destinationFolder.createFile(blob);
 }
@@ -289,16 +309,57 @@ function getImageExtension(contentType) {
 }
 
 /**
+ * ファイル名の一部を安全な文字列へ変換する
+ */
+function sanitizeFileNamePart(value, fallback) {
+  var safeValue = String(value || "")
+    .trim()
+    .replace(/[\/\\:*?"<>|]/g, "＿")
+    .replace(/[\r\n\t]/g, " ");
+
+  return safeValue || fallback;
+}
+
+/**
+ * 作業日をファイル名用のYYYYMMDD形式へ変換する
+ */
+function formatWorkDateForFileName(workDate) {
+  var normalizedDate = normalizeDateText(workDate);
+  var match = String(normalizedDate)
+    .trim()
+    .match(/^(\d{4})\/(\d{2})\/(\d{2})$/);
+
+  if (!match) {
+    throw new Error("作業日から画像ファイル名を作成できませんでした");
+  }
+
+  return match[1] + match[2] + match[3];
+}
+
+/**
  * 画像ファイル名を作る
  */
-function createImageFileName(extension) {
-  return (
-    Utilities.formatDate(
-      new Date(),
-      Session.getScriptTimeZone(),
-      "yyyyMMdd_HHmmss_SSS",
-    ) +
-    "." +
-    extension
-  );
+function createImageFileName(
+  destinationFolder,
+  workDate,
+  plant,
+  task,
+  extension,
+) {
+  var baseName =
+    formatWorkDateForFileName(workDate) +
+    "_" +
+    sanitizeFileNamePart(plant, "植物名未設定") +
+    "_" +
+    sanitizeFileNamePart(task, "作業内容未設定");
+
+  var sequence = 1;
+  var fileName;
+
+  do {
+    fileName = baseName + "_" + ("0" + sequence).slice(-2) + "." + extension;
+    sequence++;
+  } while (destinationFolder.getFilesByName(fileName).hasNext());
+
+  return fileName;
 }
