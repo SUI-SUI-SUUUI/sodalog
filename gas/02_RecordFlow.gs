@@ -11,12 +11,9 @@ function startGardenLogInput(userId, replyToken) {
       "",
       "作業日を選んでください。",
       "",
-      "1：今日",
-      "2：昨日",
-      "3：日付を入力",
-      "",
       "中止する場合は「中止」と送ってください。",
     ].join("\n"),
+    ["今日", "昨日", "日付を入力"],
   );
 }
 
@@ -45,6 +42,11 @@ function handleSessionInput(userId, replyToken, text, session) {
 
   if (session.step === "WAITING_PLACE") {
     handlePlaceSelection(userId, replyToken, text, session);
+    return;
+  }
+
+  if (session.step === "WAITING_DETAIL_PLACE_CHOICE") {
+    handleDetailPlaceChoice(userId, replyToken, text, session);
     return;
   }
 
@@ -98,6 +100,11 @@ function handleSessionInput(userId, replyToken, text, session) {
     return;
   }
 
+  if (session.step === "WAITING_PHOTO_CHOICE") {
+    handlePhotoChoice(userId, replyToken, text, session);
+    return;
+  }
+
   debugLog("未対応のセッション段階: " + session.step);
 
   replyMessage(
@@ -108,10 +115,14 @@ function handleSessionInput(userId, replyToken, text, session) {
 }
 
 /**
- * 作業日の番号選択を処理する
+ * 作業日の選択を処理する
+ *
+ * Quick Replyの文字列に加えて、従来の番号入力も受け付ける。
  */
 function handleDateSelection(userId, replyToken, text, session) {
-  if (text === "1") {
+  var selectedText = String(text || "").trim();
+
+  if (selectedText === "今日" || selectedText === "1") {
     session.workDate = getTodayText();
     session.step = "WAITING_BASE";
 
@@ -120,11 +131,12 @@ function handleDateSelection(userId, replyToken, text, session) {
     replyMessage(
       replyToken,
       buildDateConfirmedAndBaseSelectionMessage(session.workDate),
+      ["庭・北側", "庭・南側", "室内", "その他"],
     );
     return;
   }
 
-  if (text === "2") {
+  if (selectedText === "昨日" || selectedText === "2") {
     session.workDate = getYesterdayText();
 
     session.step = "WAITING_BASE";
@@ -134,11 +146,12 @@ function handleDateSelection(userId, replyToken, text, session) {
     replyMessage(
       replyToken,
       buildDateConfirmedAndBaseSelectionMessage(session.workDate),
+      ["庭・北側", "庭・南側", "室内", "その他"],
     );
     return;
   }
 
-  if (text === "3") {
+  if (selectedText === "日付を入力" || selectedText === "3") {
     session.step = "WAITING_CUSTOM_DATE";
 
     saveUserSession(userId, session);
@@ -159,14 +172,13 @@ function handleDateSelection(userId, replyToken, text, session) {
   replyMessage(
     replyToken,
     [
-      "番号を正しく読み取れませんでした。",
+      "作業日を正しく読み取れませんでした。",
       "",
-      "作業日を選んでください。",
+      "下のボタンから選んでください。",
       "",
-      "1：今日",
-      "2：昨日",
-      "3：日付を入力",
+      "中止する場合は「中止」と送ってください。",
     ].join("\n"),
+    ["今日", "昨日", "日付を入力"],
   );
 }
 
@@ -198,6 +210,7 @@ function handleCustomDateInput(userId, replyToken, text, session) {
   replyMessage(
     replyToken,
     buildDateConfirmedAndBaseSelectionMessage(session.workDate),
+    ["庭・北側", "庭・南側", "室内", "その他"],
   );
 }
 
@@ -208,33 +221,32 @@ function buildDateConfirmedAndBaseSelectionMessage(workDate) {
   return [
     "作業日を「" + formatWorkDateForDisplay(workDate) + "」に設定しました。",
     "",
-    "育成拠点を選んでください。",
-    "",
-    "1：自宅",
-    "2：その他",
+    "どこで作業しましたか？",
     "",
     "中止する場合は「中止」と送ってください。",
   ].join("\n");
 }
 
 /**
- * 自由入力された育成拠点を処理する
+ * 「その他」で自由入力された作業場所を処理する
  */
 function handleCustomBaseInput(userId, replyToken, text, session) {
-  var baseName = validateCustomInputText(text, "育成拠点", replyToken);
+  var workPlaceName = validateCustomInputText(text, "作業場所", replyToken);
 
-  if (!baseName) {
+  if (!workPlaceName) {
     return;
   }
 
-  session.base = baseName;
-  session.step = "WAITING_PLACE";
+  session.base = workPlaceName;
+  session.place = "";
+  session.step = "WAITING_DETAIL_PLACE_CHOICE";
 
   saveUserSession(userId, session);
 
   replyMessage(
     replyToken,
-    buildBaseConfirmedAndPlaceSelectionMessage(baseName),
+    buildWorkPlaceConfirmedAndDetailSelectionMessage(workPlaceName),
+    ["はい", "いいえ"],
   );
 }
 
@@ -306,7 +318,10 @@ function handleCustomWorkTypeInput(userId, replyToken, text, session) {
 
   saveUserSession(userId, session);
 
-  replyMessage(replyToken, buildMemoChoiceMessage(session.workType));
+  replyMessage(replyToken, buildMemoChoiceMessage(session.workType), [
+    "メモなし",
+    "入力する",
+  ]);
 }
 
 /**
@@ -332,14 +347,23 @@ function validateCustomInputText(text, itemName, replyToken) {
 }
 
 /**
- * 育成拠点の番号選択を処理する
+ * 作業場所のQuick Reply選択を処理する
+ *
+ * Quick Replyの文字列に加えて、従来の番号入力も受け付ける。
  */
 function handleBaseSelection(userId, replyToken, text, session) {
-  var baseName = "";
+  var selectedText = String(text || "").trim();
 
-  if (text === "1") {
-    baseName = "自宅";
-  } else if (text === "2") {
+  if (selectedText === "庭・北側" || selectedText === "1") {
+    session.base = "庭";
+    session.place = "北側";
+  } else if (selectedText === "庭・南側" || selectedText === "2") {
+    session.base = "庭";
+    session.place = "南側";
+  } else if (selectedText === "室内" || selectedText === "3") {
+    session.base = "室内";
+    session.place = "";
+  } else if (selectedText === "その他" || selectedText === "4") {
     session.step = "WAITING_CUSTOM_BASE";
 
     saveUserSession(userId, session);
@@ -347,9 +371,9 @@ function handleBaseSelection(userId, replyToken, text, session) {
     replyMessage(
       replyToken,
       [
-        "育成拠点を入力してください。",
+        "作業場所を入力してください。",
         "",
-        "例：実家、貸し農園、職場",
+        "例：ベランダ、玄関前、貸し農園",
         "",
         "中止する場合は「中止」と送ってください。",
       ].join("\n"),
@@ -359,28 +383,52 @@ function handleBaseSelection(userId, replyToken, text, session) {
     replyMessage(
       replyToken,
       [
-        "番号を正しく読み取れませんでした。",
+        "作業場所を正しく読み取れませんでした。",
         "",
-        "育成拠点を選んでください。",
-        "",
-        "1：自宅",
-        "2：その他",
+        "下のボタンから選んでください。",
         "",
         "中止する場合は「中止」と送ってください。",
       ].join("\n"),
+      ["庭・北側", "庭・南側", "室内", "その他"],
     );
     return;
   }
 
-  session.base = baseName;
-  session.step = "WAITING_PLACE";
+  session.step = "WAITING_DETAIL_PLACE_CHOICE";
 
   saveUserSession(userId, session);
 
   replyMessage(
     replyToken,
-    buildBaseConfirmedAndPlaceSelectionMessage(baseName),
+    buildWorkPlaceConfirmedAndDetailSelectionMessage(
+      buildSelectedWorkPlaceDisplay(session),
+    ),
+    ["はい", "いいえ"],
   );
+}
+
+/**
+ * 選択済みの作業場所を表示用文字列にする
+ */
+function buildSelectedWorkPlaceDisplay(session) {
+  if (session.base === "庭" && session.place) {
+    return session.base + "・" + session.place;
+  }
+
+  return session.base || session.place || "未指定";
+}
+
+/**
+ * 作業場所確定と詳細場所選択を1通にまとめる
+ */
+function buildWorkPlaceConfirmedAndDetailSelectionMessage(workPlaceName) {
+  return [
+    "作業場所を「" + workPlaceName + "」に設定しました。",
+    "",
+    "さらに詳しい場所を記録しますか？",
+    "",
+    "中止する場合は「中止」と送ってください。",
+  ].join("\n");
 }
 
 /**
@@ -486,19 +534,78 @@ function buildPlaceConfirmedAndDetailPlaceSelectionMessage(placeName) {
 }
 
 /**
- * 詳細場所の番号選択を処理する
+ * 詳しい場所を記録するかどうかを処理する
+ */
+function handleDetailPlaceChoice(userId, replyToken, text, session) {
+  var selectedText = String(text || "").trim();
+
+  if (selectedText === "はい" || selectedText === "1") {
+    session.step = "WAITING_DETAIL_PLACE";
+
+    saveUserSession(userId, session);
+
+    replyMessage(
+      replyToken,
+      [
+        "詳しい場所を選んでください。",
+        "",
+        "中止する場合は「中止」と送ってください。",
+      ].join("\n"),
+      ["中央", "東側", "西側", "直接入力"],
+    );
+    return;
+  }
+
+  if (selectedText === "いいえ" || selectedText === "2") {
+    session.detailPlace = "";
+    session.step = "WAITING_PLANT_NAME";
+
+    saveUserSession(userId, session);
+
+    replyMessage(
+      replyToken,
+      [
+        "詳しい場所は記録せずに進みます。",
+        "",
+        "植物名を入力してください。",
+        "",
+        "例：アジサイ",
+        "",
+        "中止する場合は「中止」と送ってください。",
+      ].join("\n"),
+    );
+    return;
+  }
+
+  replyMessage(
+    replyToken,
+    [
+      "選択内容を正しく読み取れませんでした。",
+      "",
+      "下のボタンから選んでください。",
+      "",
+      "中止する場合は「中止」と送ってください。",
+    ].join("\n"),
+    ["はい", "いいえ"],
+  );
+}
+
+/**
+ * 詳細場所のQuick Reply選択を処理する
+ *
+ * Quick Replyの文字列に加えて、従来の番号入力も受け付ける。
  */
 function handleDetailPlaceSelection(userId, replyToken, text, session) {
-  var detailPlaceMap = {
-    1: "北側",
-    2: "南側",
-    3: "東側",
-    4: "西側",
-    5: "中央",
-    6: "その他",
-  };
+  var selectedText = String(text || "").trim();
+  var detailPlaceName = "";
 
-  if (text === "6") {
+  if (selectedText === "中央" || selectedText === "1") {
+    detailPlaceName = "中央";
+  } else if (selectedText === "東側" || selectedText === "2") {
+    detailPlaceName = "東側";
+  } else if (selectedText === "西側" || selectedText === "3") {
+    detailPlaceName = "西側";
+  } else if (selectedText === "直接入力" || selectedText === "4") {
     session.step = "WAITING_CUSTOM_DETAIL_PLACE";
 
     saveUserSession(userId, session);
@@ -506,41 +613,30 @@ function handleDetailPlaceSelection(userId, replyToken, text, session) {
     replyMessage(
       replyToken,
       [
-        "詳細場所を入力してください。",
+        "詳しい場所を入力してください。",
         "",
-        "例：東花壇、中央鉢植え、窓際",
+        "例：花壇、窓際、フェンス沿い",
         "",
         "中止する場合は「中止」と送ってください。",
       ].join("\n"),
     );
     return;
-  }
-
-  var detailPlaceName = detailPlaceMap[text];
-
-  if (!detailPlaceName) {
+  } else {
     replyMessage(
       replyToken,
       [
-        "番号を正しく読み取れませんでした。",
+        "詳しい場所を正しく読み取れませんでした。",
         "",
-        "詳細場所を選んでください。",
-        "",
-        "1：北側",
-        "2：南側",
-        "3：東側",
-        "4：西側",
-        "5：中央",
-        "6：その他",
+        "下のボタンから選んでください。",
         "",
         "中止する場合は「中止」と送ってください。",
       ].join("\n"),
+      ["中央", "東側", "西側", "直接入力"],
     );
     return;
   }
 
   session.detailPlace = detailPlaceName;
-
   session.step = "WAITING_PLANT_NAME";
 
   saveUserSession(userId, session);
@@ -592,6 +688,7 @@ function handlePlantNameInput(userId, replyToken, text, session) {
   replyMessage(
     replyToken,
     buildPlantConfirmedAndWorkTypeSelectionMessage(plantName),
+    ["水やり", "肥料", "収穫", "剪定", "草取り", "植え付け", "その他"],
   );
 }
 
@@ -604,32 +701,34 @@ function buildPlantConfirmedAndWorkTypeSelectionMessage(plantName) {
     "",
     "作業内容を選んでください。",
     "",
-    "1：剪定",
-    "2：水やり",
-    "3：施肥",
-    "4：植え付け・植え替え",
-    "5：草取り",
-    "6：その他",
-    "",
     "中止する場合は「中止」と送ってください。",
   ].join("\n");
 }
 
 /**
- * 作業内容の番号選択を処理し、
- * garden_logへ正式保存する
+ * 作業内容のQuick Reply選択を処理する
+ *
+ * Quick Replyの文字列に加えて、従来の番号入力も受け付ける。
  */
 function handleWorkTypeSelection(userId, replyToken, text, session) {
+  var selectedText = String(text || "").trim();
+
   var workTypeMap = {
-    1: "剪定",
-    2: "水やり",
-    3: "施肥",
-    4: "植え付け・植え替え",
+    水やり: "水やり",
+    肥料: "肥料",
+    収穫: "収穫",
+    剪定: "剪定",
+    草取り: "草取り",
+    植え付け: "植え付け",
+    1: "水やり",
+    2: "肥料",
+    3: "収穫",
+    4: "剪定",
     5: "草取り",
-    6: "その他",
+    6: "植え付け",
   };
 
-  if (text === "6") {
+  if (selectedText === "その他" || selectedText === "7") {
     session.step = "WAITING_CUSTOM_WORK_TYPE";
 
     saveUserSession(userId, session);
@@ -647,36 +746,32 @@ function handleWorkTypeSelection(userId, replyToken, text, session) {
     return;
   }
 
-  var workType = workTypeMap[text];
+  var workType = workTypeMap[selectedText];
 
   if (!workType) {
     replyMessage(
       replyToken,
       [
-        "番号を正しく読み取れませんでした。",
+        "作業内容を正しく読み取れませんでした。",
         "",
-        "作業内容を選んでください。",
-        "",
-        "1：剪定",
-        "2：水やり",
-        "3：施肥",
-        "4：植え付け・植え替え",
-        "5：草取り",
-        "6：その他",
+        "下のボタンから選んでください。",
         "",
         "中止する場合は「中止」と送ってください。",
       ].join("\n"),
+      ["水やり", "肥料", "収穫", "剪定", "草取り", "植え付け", "その他"],
     );
     return;
   }
 
   session.workType = workType;
-
   session.step = "WAITING_MEMO_CHOICE";
 
   saveUserSession(userId, session);
 
-  replyMessage(replyToken, buildMemoChoiceMessage(session.workType));
+  replyMessage(replyToken, buildMemoChoiceMessage(session.workType), [
+    "メモなし",
+    "入力する",
+  ]);
 }
 
 /**
@@ -686,20 +781,21 @@ function buildMemoChoiceMessage(workType) {
   return [
     "作業内容を「" + workType + "」に設定しました。",
     "",
-    "メモを入力しますか？",
-    "",
-    "1：入力する",
-    "2：入力しない",
+    "メモを追加しますか？",
     "",
     "中止する場合は「中止」と送ってください。",
   ].join("\n");
 }
 
 /**
- * メモを入力するかどうかの番号選択を処理する
+ * メモを追加するかどうかのQuick Reply選択を処理する
+ *
+ * Quick Replyの文字列に加えて、従来の番号入力も受け付ける。
  */
 function handleMemoChoice(userId, replyToken, text, session) {
-  if (text === "1") {
+  var selectedText = String(text || "").trim();
+
+  if (selectedText === "入力する" || selectedText === "1") {
     session.step = "WAITING_MEMO_TEXT";
 
     saveUserSession(userId, session);
@@ -718,26 +814,29 @@ function handleMemoChoice(userId, replyToken, text, session) {
     return;
   }
 
-  if (text === "2") {
+  if (selectedText === "メモなし" || selectedText === "2") {
     session.memo = "";
     session.step = "WAITING_CONFIRM";
 
     saveUserSession(userId, session);
 
-    replyMessage(replyToken, buildSaveConfirmationMessage(session));
+    replyMessage(replyToken, buildSaveConfirmationMessage(session), [
+      "保存する",
+      "中止する",
+    ]);
     return;
   }
 
   replyMessage(
     replyToken,
     [
-      "番号を正しく読み取れませんでした。",
+      "メモの選択を正しく読み取れませんでした。",
       "",
-      "メモを入力しますか？",
+      "下のボタンから選んでください。",
       "",
-      "1：入力する",
-      "2：入力しない",
+      "中止する場合は「中止」と送ってください。",
     ].join("\n"),
+    ["メモなし", "入力する"],
   );
 }
 
@@ -765,7 +864,10 @@ function handleMemoInput(userId, replyToken, text, session) {
 
   saveUserSession(userId, session);
 
-  replyMessage(replyToken, buildSaveConfirmationMessage(session));
+  replyMessage(replyToken, buildSaveConfirmationMessage(session), [
+    "保存する",
+    "中止する",
+  ]);
 }
 
 /**
@@ -782,41 +884,38 @@ function buildSaveConfirmationMessage(session) {
     "植物名：" + session.plantName,
     "作業内容：" + session.workType,
     "メモ：" + (session.memo || "なし"),
-    "",
-    "1：保存する",
-    "2：中止する",
   ].join("\n");
 }
 
 /**
- * 保存確認の番号選択を処理する
+ * 保存確認のQuick Reply選択を処理する
+ *
+ * Quick Replyの文字列に加えて、従来の番号入力も受け付ける。
  */
 function handleSaveConfirmation(userId, replyToken, text, session) {
-  if (text === "1") {
-    saveGardenLogFromSession(userId, session);
+  var selectedText = String(text || "").trim();
 
-    deleteUserSession(userId);
+  if (selectedText === "保存する" || selectedText === "1") {
+    session.savedRow = saveGardenLogFromSession(userId, session);
+    session.step = "WAITING_PHOTO_CHOICE";
+
+    saveUserSession(userId, session);
 
     replyMessage(
       replyToken,
       [
         "園芸記録を保存しました。",
         "",
-        "作業日：" + formatWorkDateForDisplay(session.workDate),
-        "育成拠点：" + session.base,
-        "場所：" + session.place,
-        "詳細場所：" + session.detailPlace,
-        "植物名：" + session.plantName,
-        "作業内容：" + session.workType,
-        "メモ：" + (session.memo || "なし"),
+        "写真を追加しますか？",
         "",
-        "続けて画像を送ると、この記録に追加されます。",
+        "写真を追加しない場合は「写真なし・記録完了」を選んでください。",
       ].join("\n"),
+      buildPhotoChoiceQuickReplyActions(),
     );
     return;
   }
 
-  if (text === "2") {
+  if (selectedText === "中止する" || selectedText === "2") {
     deleteUserSession(userId);
 
     replyMessage(replyToken, "園芸記録の保存を中止しました。");
@@ -826,12 +925,79 @@ function handleSaveConfirmation(userId, replyToken, text, session) {
   replyMessage(
     replyToken,
     [
-      "番号を正しく読み取れませんでした。",
+      "保存確認を正しく読み取れませんでした。",
       "",
-      "1：保存する",
-      "2：中止する",
+      "下のボタンから選んでください。",
     ].join("\n"),
+    ["保存する", "中止する"],
   );
+}
+
+/**
+ * 写真追加の選択を処理する
+ */
+function handlePhotoChoice(userId, replyToken, text, session) {
+  var selectedText = String(text || "").trim();
+
+  if (selectedText === "写真なし・記録完了") {
+    deleteUserSession(userId);
+
+    replyMessage(replyToken, "写真なしで園芸記録を完了しました。");
+    return;
+  }
+
+  if (selectedText === "記録を取り消す") {
+    var deleted = deleteSavedGardenLogRow(userId, session.savedRow);
+
+    deleteUserSession(userId);
+
+    if (deleted) {
+      replyMessage(replyToken, "保存した園芸記録を取り消しました。");
+    } else {
+      replyMessage(
+        replyToken,
+        "取り消す園芸記録を確認できませんでした。スプレッドシートをご確認ください。",
+      );
+    }
+    return;
+  }
+
+  replyMessage(
+    replyToken,
+    [
+      "写真の追加方法を下のボタンから選んでください。",
+      "",
+      "写真を追加しない場合は「写真なし・記録完了」を選んでください。",
+    ].join("\n"),
+    buildPhotoChoiceQuickReplyActions(),
+  );
+}
+
+/**
+ * 保存直後の園芸記録を取り消す
+ */
+function deleteSavedGardenLogRow(userId, row) {
+  var targetRow = Number(row);
+
+  if (!targetRow || targetRow < 2) {
+    return false;
+  }
+
+  var sheet = getSheet();
+
+  if (targetRow > sheet.getLastRow()) {
+    return false;
+  }
+
+  var recordUserId = sheet.getRange(targetRow, 10).getDisplayValue();
+  var imageUrl = sheet.getRange(targetRow, 8).getValue();
+
+  if (String(recordUserId) !== String(userId) || imageUrl) {
+    return false;
+  }
+
+  sheet.deleteRow(targetRow);
+  return true;
 }
 
 /**
@@ -856,9 +1022,12 @@ function saveGardenLogFromSession(userId, session) {
     ]),
   );
 
+  var savedRow = sheet.getLastRow();
+
   debugLog(
     "番号選択式の園芸記録を保存しました: " +
       JSON.stringify({
+        row: savedRow,
         workDate: session.workDate,
         base: session.base,
         place: session.place,
@@ -867,4 +1036,6 @@ function saveGardenLogFromSession(userId, session) {
         workType: session.workType,
       }),
   );
+
+  return savedRow;
 }

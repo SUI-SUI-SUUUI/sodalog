@@ -1,9 +1,7 @@
 /**
  * そだログの使い方をLINEへ返信する
  */
-function replyHelpMessage(
-  replyToken
-) {
+function replyHelpMessage(replyToken) {
   replyMessage(
     replyToken,
     [
@@ -28,17 +26,14 @@ function replyHelpMessage(
       "",
       "例：",
       "2026/07/13_北側_中央_つつじ_剪定",
-    ].join("\n")
+    ].join("\n"),
   );
 }
 
 /**
  * 指定ユーザーの最近の園芸記録を取得する
  */
-function getRecentGardenLogs(
-  userId,
-  limit
-) {
+function getRecentGardenLogs(userId, limit) {
   var sheet = getSheet();
   var lastRow = sheet.getLastRow();
 
@@ -46,35 +41,20 @@ function getRecentGardenLogs(
     return [];
   }
 
-  var maxCount =
-    Number(limit) || 3;
+  var maxCount = Number(limit) || 3;
 
-  var values =
-    sheet
-      .getRange(
-        2,
-        1,
-        lastRow - 1,
-        HEADER.length
-      )
-      .getDisplayValues();
+  var values = sheet
+    .getRange(2, 1, lastRow - 1, HEADER.length)
+    .getDisplayValues();
 
   var results = [];
 
-  for (
-    var i = values.length - 1;
-    i >= 0;
-    i--
-  ) {
+  for (var i = values.length - 1; i >= 0; i--) {
     var row = values[i];
 
-    var recordUserId =
-      row[9];
+    var recordUserId = row[9];
 
-    if (
-      String(recordUserId) !==
-      String(userId)
-    ) {
+    if (String(recordUserId) !== String(userId)) {
       continue;
     }
 
@@ -90,9 +70,7 @@ function getRecentGardenLogs(
       base: row[10],
     });
 
-    if (
-      results.length >= maxCount
-    ) {
+    if (results.length >= maxCount) {
       break;
     }
   }
@@ -103,15 +81,8 @@ function getRecentGardenLogs(
 /**
  * 最近の園芸記録をLINEへ返信する
  */
-function replyRecentGardenLogs(
-  userId,
-  replyToken
-) {
-  var records =
-    getRecentGardenLogs(
-      userId,
-      3
-    );
+function replyRecentGardenLogs(userId, replyToken) {
+  var records = getRecentGardenLogs(userId, 3);
 
   if (records.length === 0) {
     replyMessage(
@@ -121,68 +92,36 @@ function replyRecentGardenLogs(
         "",
         "「記録する」と送ると、",
         "番号を選びながら記録できます。",
-      ].join("\n")
+      ].join("\n"),
     );
     return;
   }
 
-  var lines = [
-    "最近の園芸記録です。",
-  ];
+  var lines = ["最近の園芸記録です。"];
 
-  records.forEach(
-    function (record, index) {
-      lines.push("");
-      lines.push(
-        (index + 1) +
-          "件目"
-      );
+  records.forEach(function (record, index) {
+    lines.push("");
+    lines.push(index + 1 + "件目");
 
-      lines.push(
-        "作業日：" +
-          (record.workDate || "未設定")
-      );
+    lines.push("作業日：" + (record.workDate || "未設定"));
 
-      lines.push(
-        "育成拠点：" +
-          (record.base || "未設定")
-      );
+    lines.push("育成拠点：" + (record.base || "未設定"));
 
-      lines.push(
-        "場所：" +
-          (record.place || "未設定") +
-          " / " +
-          (record.detailPlace || "未設定")
-      );
+    lines.push(
+      "場所：" +
+        (record.place || "未設定") +
+        " / " +
+        (record.detailPlace || "未設定"),
+    );
 
-      lines.push(
-        "植物名：" +
-          (record.plantName || "未設定")
-      );
+    lines.push("植物名：" + (record.plantName || "未設定"));
 
-      lines.push(
-        "作業内容：" +
-          (record.workType || "未設定")
-      );
+    lines.push("作業内容：" + (record.workType || "未設定"));
 
-      lines.push(
-        "メモ：" +
-          (record.memo || "なし")
-      );
+    lines.push("メモ：" + (record.memo || "なし"));
 
-      lines.push(
-        "画像：" +
-          (
-            record.imageUrl
-              ? "あり"
-              : "なし"
-          )
-      );
-    }
-  );
+    lines.push("画像：" + (record.imageUrl ? "あり" : "なし"));
+  });
 
-  replyMessage(
-    replyToken,
-    lines.join("\n")
-  );
+  replyMessage(replyToken, lines.join("\n"));
 }

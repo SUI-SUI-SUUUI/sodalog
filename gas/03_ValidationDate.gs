@@ -164,15 +164,7 @@ function formatWorkDateForDisplay(workDate) {
   var day = Number(match[3]);
   var date = new Date(year, month - 1, day);
 
-  var weekdayNames = [
-    "日",
-    "月",
-    "火",
-    "水",
-    "木",
-    "金",
-    "土",
-  ];
+  var weekdayNames = ["日", "月", "火", "水", "木", "金", "土"];
 
   return (
     year +

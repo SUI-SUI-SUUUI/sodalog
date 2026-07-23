@@ -2,25 +2,16 @@
  * 記録用シートを取得する
  */
 function getSheet() {
-  var ss =
-    SpreadsheetApp.getActiveSpreadsheet();
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
 
-  var sheet =
-    ss.getSheetByName(
-      SHEET_NAME
-    );
+  var sheet = ss.getSheetByName(SHEET_NAME);
 
   if (!sheet) {
-    sheet =
-      ss.insertSheet(
-        SHEET_NAME
-      );
+    sheet = ss.insertSheet(SHEET_NAME);
 
     sheet.appendRow(HEADER);
   } else {
-    ensureGardenLogHeader(
-      sheet
-    );
+    ensureGardenLogHeader(sheet);
   }
 
   return sheet;
@@ -51,33 +42,17 @@ function escapeSpreadsheetRow(rowData) {
 /**
  * 既存のgarden_logへ不足している見出しを追加する
  */
-function ensureGardenLogHeader(
-  sheet
-) {
-  var userIdHeader =
-    sheet
-      .getRange(1, 10)
-      .getDisplayValue();
+function ensureGardenLogHeader(sheet) {
+  var userIdHeader = sheet.getRange(1, 10).getDisplayValue();
 
-  var baseHeader =
-    sheet
-      .getRange(1, 11)
-      .getDisplayValue();
+  var baseHeader = sheet.getRange(1, 11).getDisplayValue();
 
   if (!userIdHeader) {
-    sheet
-      .getRange(1, 10)
-      .setValue(
-        "LINEユーザーID"
-      );
+    sheet.getRange(1, 10).setValue("LINEユーザーID");
   }
 
   if (!baseHeader) {
-    sheet
-      .getRange(1, 11)
-      .setValue(
-        "育成拠点"
-      );
+    sheet.getRange(1, 11).setValue("育成拠点");
   }
 }
 
@@ -85,27 +60,16 @@ function ensureGardenLogHeader(
  * セッション用シートを取得する
  */
 function getSessionSheet() {
-  var ss =
-    SpreadsheetApp.getActiveSpreadsheet();
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
 
-  var sheet =
-    ss.getSheetByName(
-      SESSION_SHEET_NAME
-    );
+  var sheet = ss.getSheetByName(SESSION_SHEET_NAME);
 
   if (!sheet) {
-    sheet =
-      ss.insertSheet(
-        SESSION_SHEET_NAME
-      );
+    sheet = ss.insertSheet(SESSION_SHEET_NAME);
 
-    sheet.appendRow(
-      SESSION_HEADER
-    );
+    sheet.appendRow(SESSION_HEADER);
   } else {
-    ensureSessionSheetHeader(
-      sheet
-    );
+    ensureSessionSheetHeader(sheet);
   }
 
   return sheet;
@@ -114,65 +78,38 @@ function getSessionSheet() {
 /**
  * 既存のuser_sessionsへメモ列を追加する
  */
-function ensureSessionSheetHeader(
-  sheet
-) {
-  var memoHeader =
-    sheet
-      .getRange(1, 9)
-      .getDisplayValue();
+function ensureSessionSheetHeader(sheet) {
+  var memoHeader = sheet.getRange(1, 9).getDisplayValue();
 
-  var updatedAtHeader =
-    sheet
-      .getRange(1, 10)
-      .getDisplayValue();
+  var updatedAtHeader = sheet.getRange(1, 10).getDisplayValue();
 
   if (memoHeader === "更新日時") {
     sheet.insertColumnBefore(9);
   }
 
-  sheet
-    .getRange(1, 9)
-    .setValue("メモ");
+  sheet.getRange(1, 9).setValue("メモ");
 
-  sheet
-    .getRange(1, 10)
-    .setValue("更新日時");
+  sheet.getRange(1, 10).setValue("更新日時");
 }
 
 /**
  * ユーザーのセッションを取得する
  */
 function getUserSession(userId) {
-  var sheet =
-    getSessionSheet();
+  var sheet = getSessionSheet();
 
-  var lastRow =
-    sheet.getLastRow();
+  var lastRow = sheet.getLastRow();
 
   if (lastRow < 2) {
     return null;
   }
 
-  var values =
-    sheet
-      .getRange(
-        2,
-        1,
-        lastRow - 1,
-        SESSION_HEADER.length
-      )
-      .getValues();
+  var values = sheet
+    .getRange(2, 1, lastRow - 1, SESSION_HEADER.length)
+    .getValues();
 
-  for (
-    var i = 0;
-    i < values.length;
-    i++
-  ) {
-    if (
-      String(values[i][0]) ===
-      String(userId)
-    ) {
+  for (var i = 0; i < values.length; i++) {
+    if (String(values[i][0]) === String(userId)) {
       return {
         row: i + 2,
         userId: values[i][0],
@@ -195,15 +132,10 @@ function getUserSession(userId) {
 /**
  * ユーザーのセッションを保存する
  */
-function saveUserSession(
-  userId,
-  sessionData
-) {
-  var sheet =
-    getSessionSheet();
+function saveUserSession(userId, sessionData) {
+  var sheet = getSessionSheet();
 
-  var existingSession =
-    getUserSession(userId);
+  var existingSession = getUserSession(userId);
 
   var rowData = escapeSpreadsheetRow([
     userId,
@@ -220,12 +152,7 @@ function saveUserSession(
 
   if (existingSession) {
     sheet
-      .getRange(
-        existingSession.row,
-        1,
-        1,
-        SESSION_HEADER.length
-      )
+      .getRange(existingSession.row, 1, 1, SESSION_HEADER.length)
       .setValues([rowData]);
   } else {
     sheet.appendRow(rowData);
@@ -236,36 +163,29 @@ function saveUserSession(
  * ユーザーのセッションを削除する
  */
 function deleteUserSession(userId) {
-  var sheet =
-    getSessionSheet();
+  var sheet = getSessionSheet();
 
-  var existingSession =
-    getUserSession(userId);
+  var existingSession = getUserSession(userId);
 
   if (!existingSession) {
     return;
   }
 
-  sheet.deleteRow(
-    existingSession.row
-  );
+  sheet.deleteRow(existingSession.row);
 }
 
 /**
  * 新しいセッションを開始する
  */
 function startUserSession(userId) {
-  saveUserSession(
-    userId,
-    {
-      step: "WAITING_DATE",
-      workDate: "",
-      base: "",
-      place: "",
-      detailPlace: "",
-      plantName: "",
-      workType: "",
-      memo: "",
-    }
-  );
+  saveUserSession(userId, {
+    step: "WAITING_DATE",
+    workDate: "",
+    base: "",
+    place: "",
+    detailPlace: "",
+    plantName: "",
+    workType: "",
+    memo: "",
+  });
 }

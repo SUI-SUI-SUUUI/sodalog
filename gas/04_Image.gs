@@ -67,15 +67,17 @@ function handleImageMessage(event) {
       folder.getUrl(),
     );
 
+    deleteUserSession(userId);
+
     replyMessage(
       replyToken,
-      "画像を保存し、園芸記録に追加しました。\n" +
+      "画像を保存し、園芸記録を完了しました。\n" +
         "保存先: " +
         formatWorkDateForDisplay(latestRecord.workDate) +
         " / " +
-        latestRecord.place +
+        (latestRecord.place || "未設定") +
         " / " +
-        latestRecord.detailPlace +
+        (latestRecord.detailPlace || "未設定") +
         "\n" +
         "ファイル名: " +
         file.getName(),
@@ -137,16 +139,12 @@ function getLatestRecordWithoutImage(userId) {
     }
 
     var workDate = sheet.getRange(row, 2).getDisplayValue();
-
     var place = sheet.getRange(row, 3).getDisplayValue();
-
     var detailPlace = sheet.getRange(row, 4).getDisplayValue();
-
     var plant = sheet.getRange(row, 5).getDisplayValue();
-
     var task = sheet.getRange(row, 6).getDisplayValue();
 
-    if (!workDate || !place || !detailPlace || !plant || !task) {
+    if (!workDate || !plant || !task) {
       continue;
     }
 
