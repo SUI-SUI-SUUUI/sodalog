@@ -3,6 +3,9 @@
  *
  * quickReplyLabelsを省略した場合は、従来どおり通常のテキスト返信を送る。
  * 文字列配列を渡した場合は、同じ文字列を送信するQuick Replyを付ける。
+ *
+ * 入力途中の中止案内が本文に含まれる場合は、
+ * 「中止する」のQuick Replyを自動的に追加する。
  */
 function replyMessage(replyToken, text, quickReplyLabels) {
   var token = PropertiesService.getScriptProperties().getProperty(
@@ -18,7 +21,14 @@ function replyMessage(replyToken, text, quickReplyLabels) {
     text: text,
   };
 
-  var quickReplyItems = buildMessageQuickReplyItems(quickReplyLabels);
+  var normalizedQuickReplyLabels = addCancelQuickReplyIfNeeded(
+    text,
+    quickReplyLabels,
+  );
+
+  var quickReplyItems = buildMessageQuickReplyItems(
+    normalizedQuickReplyLabels,
+  );
 
   if (quickReplyItems.length > 0) {
     message.quickReply = {
@@ -44,6 +54,48 @@ function replyMessage(replyToken, text, quickReplyLabels) {
   debugLog("LINE reply status: " + response.getResponseCode());
 
   debugLog("LINE reply body: " + response.getContentText());
+}
+
+/**
+ * 入力途中の案内文がある場合に、
+ * 「中止する」のQuick Replyを追加する
+ */
+function addCancelQuickReplyIfNeeded(text, quickReplyLabels) {
+  var labels = Array.isArray(quickReplyLabels)
+    ? quickReplyLabels.slice()
+    : [];
+
+  var messageText = String(text || "");
+
+  var hasCancelGuide =
+    messageText.indexOf(
+      "中止する場合は「中止」と送ってください。",
+    ) !== -1;
+
+  if (!hasCancelGuide) {
+    return labels;
+  }
+
+  var alreadyHasCancel = labels.some(function (item) {
+    if (typeof item === "string") {
+      return item.trim() === "中止する";
+    }
+
+    if (!item || typeof item !== "object") {
+      return false;
+    }
+
+    return (
+      String(item.label || "").trim() === "中止する" ||
+      String(item.text || "").trim() === "中止する"
+    );
+  });
+
+  if (!alreadyHasCancel) {
+    labels.push("中止する");
+  }
+
+  return labels;
 }
 
 /**

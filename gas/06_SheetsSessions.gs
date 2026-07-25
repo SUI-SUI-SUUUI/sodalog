@@ -76,20 +76,34 @@ function getSessionSheet() {
 }
 
 /**
- * 既存のuser_sessionsへメモ列を追加する
+ * 既存のuser_sessionsへ
+ * メモ列・保存行番号列を追加して見出しを整える
  */
 function ensureSessionSheetHeader(sheet) {
-  var memoHeader = sheet.getRange(1, 9).getDisplayValue();
+  /*
+   * 古い構成で9列目が「更新日時」の場合は、
+   * その前にメモ列を追加する。
+   */
+  var column9Header = sheet.getRange(1, 9).getDisplayValue();
 
-  var updatedAtHeader = sheet.getRange(1, 10).getDisplayValue();
-
-  if (memoHeader === "更新日時") {
+  if (column9Header === "更新日時") {
     sheet.insertColumnBefore(9);
   }
 
-  sheet.getRange(1, 9).setValue("メモ");
+  /*
+   * メモ列追加後、または従来の10列構成で
+   * 10列目が「更新日時」の場合は、
+   * その前に保存行番号列を追加する。
+   */
+  var column10Header = sheet.getRange(1, 10).getDisplayValue();
 
-  sheet.getRange(1, 10).setValue("更新日時");
+  if (column10Header === "更新日時") {
+    sheet.insertColumnBefore(10);
+  }
+
+  sheet.getRange(1, 9).setValue("メモ");
+  sheet.getRange(1, 10).setValue("保存行番号");
+  sheet.getRange(1, 11).setValue("更新日時");
 }
 
 /**
@@ -121,7 +135,8 @@ function getUserSession(userId) {
         plantName: values[i][6],
         workType: values[i][7],
         memo: values[i][8],
-        updatedAt: values[i][9],
+        savedRow: values[i][9],
+        updatedAt: values[i][10],
       };
     }
   }
@@ -147,6 +162,7 @@ function saveUserSession(userId, sessionData) {
     sessionData.plantName || "",
     sessionData.workType || "",
     sessionData.memo || "",
+    sessionData.savedRow || "",
     new Date(),
   ]);
 
@@ -187,5 +203,6 @@ function startUserSession(userId) {
     plantName: "",
     workType: "",
     memo: "",
+    savedRow: "",
   });
 }

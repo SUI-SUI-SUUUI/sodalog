@@ -137,7 +137,15 @@ function handleTextMessage(event) {
     return;
   }
 
-  if (text === "中止" || text === "キャンセル") {
+  /*
+   * 手入力の「中止」「キャンセル」に加え、
+   * Quick Replyの「中止する」も同じ処理にする。
+   */
+  if (
+    text === "中止" ||
+    text === "キャンセル" ||
+    text === "中止する"
+  ) {
     deleteUserSession(userId);
 
     replyMessage(replyToken, "園芸記録の入力を中止しました。");
