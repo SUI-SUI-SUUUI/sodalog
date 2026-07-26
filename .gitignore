@@ -19,6 +19,8 @@ secrets.json
 
 # --- リポジトリ外で管理する重複コピー ---
 my-garden-lab-2026/
+/docs/edd2026-ouboyoukou.pdf
+/docs/edd2026-sanka-kiyaku.pdf
 
 # --- OS / エディタ ---
 .DS_Store
@@ -37,5 +39,5 @@ desktop.ini
 
 # --- 依存関係（将来追加時） ---
 node_modules/
-ChatGPT�J���t���[.txt
+ChatGPT�J���t���[.txt
 /ChatGPT*.txt
