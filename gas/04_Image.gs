@@ -36,33 +36,50 @@ function handleImageMessage(event) {
       return;
     }
 
-    var latestRecord = getLatestRecordWithoutImage(userId);
+    var session = getUserSession(userId);
 
-    if (!latestRecord) {
+    if (
+      !session ||
+      session.step !== "WAITING_PHOTO_CHOICE" ||
+      !session.savedRow
+    ) {
       replyMessage(
         replyToken,
-        "画像を追加できる園芸記録が見つかりませんでした。\n" +
-          "先に作業内容を送信してください。",
+        "この画像を追加できる園芸記録はありません。\n" +
+          "先に「記録する」から園芸記録を保存してください。",
+      );
+      return;
+    }
+
+    var pendingRecord = getPendingImageRecord(userId, session.savedRow);
+
+    if (!pendingRecord) {
+      deleteUserSession(userId);
+
+      replyMessage(
+        replyToken,
+        "画像を追加できる園芸記録を確認できませんでした。\n" +
+          "もう一度「記録する」から園芸記録を保存してください。",
       );
       return;
     }
 
     var folder = getOrCreateRecordFolder(
-      latestRecord.workDate,
-      latestRecord.place,
-      latestRecord.detailPlace,
+      pendingRecord.workDate,
+      pendingRecord.place,
+      pendingRecord.detailPlace,
     );
 
     var file = saveLineImageToDrive(
       messageId,
       folder,
-      latestRecord.workDate,
-      latestRecord.plant,
-      latestRecord.task,
+      pendingRecord.workDate,
+      pendingRecord.plant,
+      pendingRecord.task,
     );
 
     updateRecordImageInformation(
-      latestRecord.row,
+      pendingRecord.row,
       file.getUrl(),
       folder.getUrl(),
     );
@@ -73,11 +90,11 @@ function handleImageMessage(event) {
       replyToken,
       "画像を保存し、園芸記録を完了しました。\n" +
         "保存先: " +
-        formatWorkDateForDisplay(latestRecord.workDate) +
+        formatWorkDateForDisplay(pendingRecord.workDate) +
         " / " +
-        (latestRecord.place || "未設定") +
+        (pendingRecord.place || "未設定") +
         " / " +
-        (latestRecord.detailPlace || "未設定") +
+        (pendingRecord.detailPlace || "未設定") +
         "\n" +
         "ファイル名: " +
         file.getName(),
@@ -98,67 +115,63 @@ function handleImageMessage(event) {
 }
 
 /**
- * 指定ユーザーの記録から、
- * 画像URLが空欄の最新記録を取得する
+ * 画像追加待ちセッションに保存された行番号から、
+ * 画像を追加する対象レコードを取得する
  */
-function getLatestRecordWithoutImage(userId) {
-  var sheet = getSheet();
-  var lastRow = sheet.getLastRow();
+function getPendingImageRecord(userId, savedRow) {
+  var targetRow = Number(savedRow);
 
-  if (lastRow < 2) {
+  if (!targetRow || targetRow < 2) {
     return null;
   }
 
-  var imageUrlColumn = 8;
-  var userIdColumn = 10;
-  var createdAtColumn = 1;
+  var sheet = getSheet();
+
+  if (targetRow > sheet.getLastRow()) {
+    return null;
+  }
+
+  var recordUserId = sheet.getRange(targetRow, 10).getDisplayValue();
+  var imageUrl = sheet.getRange(targetRow, 8).getValue();
+  var createdAt = sheet.getRange(targetRow, 1).getValue();
+
+  if (String(recordUserId) !== String(userId)) {
+    return null;
+  }
+
+  if (imageUrl) {
+    return null;
+  }
+
+  if (!(createdAt instanceof Date)) {
+    return null;
+  }
+
   var imageAttachLimitMilliseconds = 30 * 60 * 1000;
   var now = new Date().getTime();
 
-  for (var row = lastRow; row >= 2; row--) {
-    var recordUserId = sheet.getRange(row, userIdColumn).getDisplayValue();
-
-    if (String(recordUserId) !== String(userId)) {
-      continue;
-    }
-
-    var imageUrl = sheet.getRange(row, imageUrlColumn).getValue();
-
-    if (imageUrl) {
-      continue;
-    }
-
-    var createdAt = sheet.getRange(row, createdAtColumn).getValue();
-
-    if (!(createdAt instanceof Date)) {
-      continue;
-    }
-
-    if (now - createdAt.getTime() > imageAttachLimitMilliseconds) {
-      continue;
-    }
-
-    var workDate = sheet.getRange(row, 2).getDisplayValue();
-    var place = sheet.getRange(row, 3).getDisplayValue();
-    var detailPlace = sheet.getRange(row, 4).getDisplayValue();
-    var plant = sheet.getRange(row, 5).getDisplayValue();
-    var task = sheet.getRange(row, 6).getDisplayValue();
-
-    if (!workDate || !plant || !task) {
-      continue;
-    }
-
-    return {
-      row: row,
-      workDate: workDate,
-      place: place,
-      detailPlace: detailPlace,
-      plant: plant,
-      task: task,
-    };
+  if (now - createdAt.getTime() > imageAttachLimitMilliseconds) {
+    return null;
   }
 
-  return null;
+  var workDate = sheet.getRange(targetRow, 2).getDisplayValue();
+  var place = sheet.getRange(targetRow, 3).getDisplayValue();
+  var detailPlace = sheet.getRange(targetRow, 4).getDisplayValue();
+  var plant = sheet.getRange(targetRow, 5).getDisplayValue();
+  var task = sheet.getRange(targetRow, 6).getDisplayValue();
+
+  if (!workDate || !plant || !task) {
+    return null;
+  }
+
+  return {
+    row: targetRow,
+    workDate: workDate,
+    place: place,
+    detailPlace: detailPlace,
+    plant: plant,
+    task: task,
+  };
 }
 
 /**
