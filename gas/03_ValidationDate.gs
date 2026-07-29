@@ -37,7 +37,7 @@ function validateAndParseText(text) {
 
   var parts = String(text).trim().split("_");
 
-  if (parts.length !== 5) {
+  if (parts.length !== 5 && parts.length !== 7) {
     return {
       isValid: false,
       errorCode: "INVALID_ITEM_COUNT",
@@ -45,12 +45,15 @@ function validateAndParseText(text) {
   }
 
   var workDate = parts[0].trim();
-  var place = parts[1].trim();
-  var detailPlace = parts[2].trim();
-  var plant = parts[3].trim();
-  var task = parts[4].trim();
+  var hasLiffFields = parts.length === 7;
+  var base = hasLiffFields ? parts[1].trim() : "";
+  var place = hasLiffFields ? parts[2].trim() : parts[1].trim();
+  var detailPlace = hasLiffFields ? parts[3].trim() : parts[2].trim();
+  var plant = hasLiffFields ? parts[4].trim() : parts[3].trim();
+  var task = hasLiffFields ? parts[5].trim() : parts[4].trim();
+  var memo = hasLiffFields ? parts[6].trim() : "";
 
-  if (!workDate || !place || !detailPlace || !plant || !task) {
+  if (!workDate || !place || !plant || !task) {
     return {
       isValid: false,
       errorCode: "EMPTY_ITEM",
@@ -73,6 +76,8 @@ function validateAndParseText(text) {
       detailPlace: detailPlace,
       plant: plant,
       task: task,
+      memo: memo,
+      base: base,
     },
   };
 }

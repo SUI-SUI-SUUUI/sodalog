@@ -168,13 +168,13 @@ function handleTextMessage(event) {
   }
 
   var session = getUserSession(userId);
+  var validationResult = validateAndParseText(text);
+  var isLiffLog = isLiffGardenLogText(text);
 
-  if (session) {
+  if (session && !isLiffLog) {
     handleSessionInput(userId, replyToken, text, session);
     return;
   }
-
-  var validationResult = validateAndParseText(text);
 
   if (!validationResult.isValid) {
     debugLog("入力形式エラー: " + validationResult.errorCode);
@@ -204,6 +204,10 @@ function handleTextMessage(event) {
 
   var parsed = validationResult.data;
 
+  if (isLiffLog && session) {
+    deleteUserSession(userId);
+  }
+
   var sheet = getSheet();
 
   sheet.appendRow(
@@ -214,11 +218,11 @@ function handleTextMessage(event) {
       parsed.detailPlace,
       parsed.plant,
       parsed.task,
-      "",
+      parsed.memo,
       "",
       "",
       userId,
-      "",
+      parsed.base,
     ]),
   );
 
@@ -241,7 +245,19 @@ function handleTextMessage(event) {
       "\n" +
       "作業内容: " +
       parsed.task +
+      (parsed.base ? "\n育成拠点: " + parsed.base : "") +
+      (parsed.memo ? "\nメモ: " + parsed.memo : "") +
       "\n\n" +
       "続けて画像を送ると、この記録に追加されます。",
   );
+}
+
+/**
+ * LIFFから送られる7項目形式の記録か確認する。
+ *
+ * 段階入力セッションが残っていても、LIFFで確定した記録は
+ * セッション入力として扱わず直接保存する。
+ */
+function isLiffGardenLogText(text) {
+  return String(text || "").trim().split("_").length === 7;
 }

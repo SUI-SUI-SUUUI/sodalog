@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <base target="_top">
+
+    <meta charset="UTF-8">
+
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1"
+    >
+
+    <title>そだログ</title>
+
+    <script
+      charset="utf-8"
+      src="https://static.line-scdn.net/liff/edge/2/sdk.js"
+    ></script>
+
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        padding: 20px 16px 40px;
+        background: #f7faf7;
+        color: #263326;
+        font-family:
+          -apple-system,
+          BlinkMacSystemFont,
+          "Hiragino Kaku Gothic ProN",
+          "Yu Gothic",
+          sans-serif;
+      }
+
+      .container {
+        max-width: 520px;
+        margin: 0 auto;
+      }
+
+      .card {
+        padding: 24px 20px;
+        background: #ffffff;
+        border-radius: 16px;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+      }
+
+      h1 {
+        margin: 0 0 8px;
+        font-size: 24px;
+      }
+
+      .description {
+        margin: 0 0 24px;
+        color: #586458;
+        font-size: 14px;
+        line-height: 1.6;
+      }
+
+      .field {
+        margin-bottom: 20px;
+      }
+
+      label,
+      .field-title {
+        display: block;
+        margin-bottom: 8px;
+        font-size: 15px;
+        font-weight: 700;
+      }
+
+      input,
+      select,
+      textarea {
+        width: 100%;
+        padding: 12px;
+        border: 1px solid #cdd8cd;
+        border-radius: 10px;
+        background: #ffffff;
+        color: #263326;
+        font-size: 16px;
+      }
+
+      textarea {
+        min-height: 100px;
+        resize: vertical;
+      }
+
+      .task-options {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+      }
+
+      .task-option {
+        margin: 0;
+        font-weight: 400;
+      }
+
+      .task-option input {
+        position: absolute;
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      .task-option span {
+        display: block;
+        padding: 11px 8px;
+        border: 1px solid #cdd8cd;
+        border-radius: 10px;
+        background: #ffffff;
+        text-align: center;
+        font-size: 14px;
+      }
+
+      .task-option input:checked + span {
+        border-color: #4f7956;
+        background: #e8f2e9;
+        font-weight: 700;
+      }
+
+      .button {
+        width: 100%;
+        margin-top: 8px;
+        padding: 14px;
+        border: 0;
+        border-radius: 12px;
+        font-size: 16px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      .button-primary {
+        background: #4f7956;
+        color: #ffffff;
+      }
+
+      .button-secondary {
+        border: 1px solid #4f7956;
+        background: #ffffff;
+        color: #3f6546;
+      }
+
+      .button-cancel {
+        background: #eef1ee;
+        color: #4b554b;
+      }
+
+      .status {
+        margin-bottom: 20px;
+        padding: 10px 12px;
+        border-radius: 10px;
+        background: #eef6ee;
+        font-size: 13px;
+        line-height: 1.5;
+        white-space: pre-line;
+      }
+
+      .status.error {
+        background: #fff0f0;
+        color: #8b1f1f;
+      }
+
+      .hidden {
+        display: none;
+      }
+
+      .confirmation-list {
+        margin: 0 0 24px;
+        padding: 0;
+        list-style: none;
+      }
+
+      .confirmation-item {
+        padding: 14px 0;
+        border-bottom: 1px solid #e2e8e2;
+      }
+
+      .confirmation-item:first-child {
+        border-top: 1px solid #e2e8e2;
+      }
+
+      .confirmation-label {
+        display: block;
+        margin-bottom: 4px;
+        color: #687368;
+        font-size: 13px;
+      }
+
+      .confirmation-value {
+        display: block;
+        font-size: 16px;
+        font-weight: 700;
+        line-height: 1.6;
+        overflow-wrap: anywhere;
+        white-space: pre-wrap;
+      }
+
+      .message {
+        margin-top: 20px;
+        padding: 12px;
+        border-radius: 10px;
+        background: #eef6ee;
+        font-size: 14px;
+        line-height: 1.6;
+      }
+    </style>
+  </head>
+
+  <body>
+    <main class="container">
+      <section id="inputScreen" class="card">
+        <h1>園芸記録を追加</h1>
+
+        <p class="description">
+          今日の作業内容を入力してください。
+        </p>
+
+        <div id="status" class="status">
+          LIFFを初期化しています。
+        </div>
+
+        <form id="gardenLogForm">
+          <div class="field">
+            <label for="workDate">作業日</label>
+
+            <input
+              id="workDate"
+              name="workDate"
+              type="date"
+              required
+            >
+          </div>
+
+          <div class="field">
+            <label for="base">育成拠点</label>
+
+            <select id="base" name="base" required>
+              <option value="">選択してください</option>
+              <option value="自宅">自宅</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="place">場所</label>
+
+            <select id="place" name="place" required>
+              <option value="">選択してください</option>
+              <option value="庭">庭</option>
+              <option value="室内">室内</option>
+              <option value="その他">その他</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="detailPlace">詳細場所</label>
+
+            <select id="detailPlace" name="detailPlace">
+              <option value="">省略する</option>
+              <option value="北側">北側</option>
+              <option value="南側">南側</option>
+              <option value="中央">中央</option>
+              <option value="東側">東側</option>
+              <option value="西側">西側</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="plant">植物名</label>
+
+            <input
+              id="plant"
+              name="plant"
+              type="text"
+              placeholder="例：アジサイ"
+              required
+            >
+          </div>
+
+          <div class="field">
+            <span class="field-title">作業内容</span>
+
+            <div class="task-options">
+              <label class="task-option">
+                <input
+                  type="radio"
+                  name="task"
+                  value="水やり"
+                  required
+                >
+                <span>水やり</span>
+              </label>
+
+              <label class="task-option">
+                <input
+                  type="radio"
+                  name="task"
+                  value="肥料"
+                >
+                <span>肥料</span>
+              </label>
+
+              <label class="task-option">
+                <input
+                  type="radio"
+                  name="task"
+                  value="収穫"
+                >
+                <span>収穫</span>
+              </label>
+
+              <label class="task-option">
+                <input
+                  type="radio"
+                  name="task"
+                  value="剪定"
+                >
+                <span>剪定</span>
+              </label>
+
+              <label class="task-option">
+                <input
+                  type="radio"
+                  name="task"
+                  value="草取り"
+                >
+                <span>草取り</span>
+              </label>
+
+              <label class="task-option">
+                <input
+                  type="radio"
+                  name="task"
+                  value="植え付け"
+                >
+                <span>植え付け</span>
+              </label>
+
+              <label class="task-option">
+                <input
+                  type="radio"
+                  name="task"
+                  value="成長記録"
+                >
+                <span>成長記録</span>
+              </label>
+
+              <label class="task-option">
+                <input
+                  type="radio"
+                  name="task"
+                  value="その他"
+                >
+                <span>その他</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="memo">メモ</label>
+
+            <textarea
+              id="memo"
+              name="memo"
+              placeholder="省略できます"
+            ></textarea>
+          </div>
+
+          <button
+            class="button button-primary"
+            type="submit"
+          >
+            内容を確認する
+          </button>
+        </form>
+      </section>
+
+      <section id="confirmationScreen" class="card hidden">
+        <h1>入力内容の確認</h1>
+
+        <p class="description">
+          この内容で記録しますか？
+        </p>
+
+        <ul class="confirmation-list">
+          <li class="confirmation-item">
+            <span class="confirmation-label">作業日</span>
+            <span
+              id="confirmWorkDate"
+              class="confirmation-value"
+            ></span>
+          </li>
+
+          <li class="confirmation-item">
+            <span class="confirmation-label">育成拠点</span>
+            <span
+              id="confirmBase"
+              class="confirmation-value"
+            ></span>
+          </li>
+
+          <li class="confirmation-item">
+            <span class="confirmation-label">場所</span>
+            <span
+              id="confirmPlace"
+              class="confirmation-value"
+            ></span>
+          </li>
+
+          <li class="confirmation-item">
+            <span class="confirmation-label">詳細場所</span>
+            <span
+              id="confirmDetailPlace"
+              class="confirmation-value"
+            ></span>
+          </li>
+
+          <li class="confirmation-item">
+            <span class="confirmation-label">植物名</span>
+            <span
+              id="confirmPlant"
+              class="confirmation-value"
+            ></span>
+          </li>
+
+          <li class="confirmation-item">
+            <span class="confirmation-label">作業内容</span>
+            <span
+              id="confirmTask"
+              class="confirmation-value"
+            ></span>
+          </li>
+
+          <li class="confirmation-item">
+            <span class="confirmation-label">メモ</span>
+            <span
+              id="confirmMemo"
+              class="confirmation-value"
+            ></span>
+          </li>
+        </ul>
+
+        <button
+          id="saveButton"
+          class="button button-primary"
+          type="button"
+        >
+          保存する
+        </button>
+
+        <button
+          id="backButton"
+          class="button button-secondary"
+          type="button"
+        >
+          入力画面に戻る
+        </button>
+
+        <button
+          id="cancelButton"
+          class="button button-cancel"
+          type="button"
+        >
+          中止する
+        </button>
+
+        <div id="confirmationMessage" class="message hidden"></div>
+      </section>
+    </main>
+
+    <script>
+      const LIFF_ID = "2010871516-DJ2YSRIw";
+
+      const inputScreen =
+        document.getElementById("inputScreen");
+
+      const confirmationScreen =
+        document.getElementById("confirmationScreen");
+
+      const gardenLogForm =
+        document.getElementById("gardenLogForm");
+
+      const confirmationMessage =
+        document.getElementById("confirmationMessage");
+
+      async function initializeLiff() {
+        const statusElement =
+          document.getElementById("status");
+
+        try {
+          await liff.init({
+            liffId: LIFF_ID,
+            withLoginOnExternalBrowser: true,
+          });
+
+          if (!liff.isLoggedIn()) {
+            statusElement.textContent =
+              "LINEログインを開始します。";
+
+            liff.login();
+            return;
+          }
+
+          const idToken = liff.getIDToken();
+
+          statusElement.classList.remove("error");
+
+          if (!idToken) {
+            statusElement.classList.add("error");
+            statusElement.textContent =
+              "LINE認証情報を取得できませんでした。";
+            return;
+          }
+
+          statusElement.textContent =
+            "LINEとの接続に成功しました。";
+        } catch (error) {
+          console.error("LIFF初期化エラー", error);
+
+          statusElement.classList.add("error");
+          statusElement.textContent =
+            "LINEとの接続に失敗しました。";
+        }
+      }
+
+      function setToday() {
+        const today = new Date();
+
+        const localDate = new Date(
+          today.getTime() -
+            today.getTimezoneOffset() * 60000,
+        )
+          .toISOString()
+          .slice(0, 10);
+
+        document.getElementById("workDate").value =
+          localDate;
+      }
+
+      function getSelectedTask() {
+        const selectedTask =
+          document.querySelector(
+            'input[name="task"]:checked',
+          );
+
+        return selectedTask
+          ? selectedTask.value
+          : "";
+      }
+
+      function getFormData() {
+        return {
+          workDate:
+            document.getElementById("workDate").value,
+          base:
+            document.getElementById("base").value,
+          place:
+            document.getElementById("place").value,
+          detailPlace:
+            document.getElementById("detailPlace").value,
+          plant:
+            document.getElementById("plant").value.trim(),
+          task:
+            getSelectedTask(),
+          memo:
+            document.getElementById("memo").value.trim(),
+        };
+      }
+
+      function formatWorkDate(workDate) {
+        if (!workDate) {
+          return "";
+        }
+
+        const dateParts = workDate.split("-");
+
+        if (dateParts.length !== 3) {
+          return workDate;
+        }
+
+        return (
+          dateParts[0] +
+          "年" +
+          Number(dateParts[1]) +
+          "月" +
+          Number(dateParts[2]) +
+          "日"
+        );
+      }
+
+      function displayConfirmation(data) {
+        document.getElementById(
+          "confirmWorkDate",
+        ).textContent = formatWorkDate(data.workDate);
+
+        document.getElementById(
+          "confirmBase",
+        ).textContent = data.base;
+
+        document.getElementById(
+          "confirmPlace",
+        ).textContent = data.place;
+
+        document.getElementById(
+          "confirmDetailPlace",
+        ).textContent = data.detailPlace || "省略";
+
+        document.getElementById(
+          "confirmPlant",
+        ).textContent = data.plant;
+
+        document.getElementById(
+          "confirmTask",
+        ).textContent = data.task;
+
+        document.getElementById(
+          "confirmMemo",
+        ).textContent = data.memo || "なし";
+
+        confirmationMessage.classList.add("hidden");
+        confirmationMessage.textContent = "";
+
+        inputScreen.classList.add("hidden");
+        confirmationScreen.classList.remove("hidden");
+
+        window.scrollTo({
+          top: 0,
+          behavior: "smooth",
+        });
+      }
+
+      function returnToInputScreen() {
+        confirmationScreen.classList.add("hidden");
+        inputScreen.classList.remove("hidden");
+
+        window.scrollTo({
+          top: 0,
+          behavior: "smooth",
+        });
+      }
+
+      function cancelInput() {
+        const shouldCancel = window.confirm(
+          "入力内容を削除して中止しますか？",
+        );
+
+        if (!shouldCancel) {
+          return;
+        }
+
+        gardenLogForm.reset();
+        setToday();
+
+        confirmationScreen.classList.add("hidden");
+        inputScreen.classList.remove("hidden");
+
+        window.scrollTo({
+          top: 0,
+          behavior: "smooth",
+        });
+      }
+
+      gardenLogForm.addEventListener(
+        "submit",
+        function (event) {
+          event.preventDefault();
+
+          if (!gardenLogForm.reportValidity()) {
+            return;
+          }
+
+          const formData = getFormData();
+
+          displayConfirmation(formData);
+        },
+      );
+
+      document
+        .getElementById("backButton")
+        .addEventListener(
+          "click",
+          returnToInputScreen,
+        );
+
+      document
+        .getElementById("cancelButton")
+        .addEventListener(
+          "click",
+          cancelInput,
+        );
+
+document
+  .getElementById("saveButton")
+  .addEventListener(
+    "click",
+    async function () {
+      const saveButton =
+        document.getElementById("saveButton");
+
+      confirmationMessage.classList.remove(
+        "hidden",
+      );
+
+      saveButton.disabled = true;
+      saveButton.textContent = "保存しています。";
+
+      confirmationMessage.textContent =
+        "LINE認証を確認しています。";
+
+      try {
+        if (!liff.isLoggedIn()) {
+          throw new Error(
+            "LINEへログインしていません。",
+          );
+        }
+
+        const idToken = liff.getIDToken();
+
+        if (!idToken) {
+          throw new Error(
+            "LINE認証情報を取得できませんでした。",
+          );
+        }
+
+        const gardenLog = getFormData();
+
+        google.script.run
+          .withSuccessHandler(
+            function (result) {
+              if (!result || !result.success) {
+                saveButton.disabled = false;
+                saveButton.textContent = "保存する";
+
+                confirmationMessage.textContent =
+                  result && result.message
+                    ? result.message
+                    : "記録を保存できませんでした。";
+
+                return;
+              }
+
+              confirmationMessage.textContent =
+                "園芸記録を保存しました。";
+
+              saveButton.textContent = "保存完了";
+
+              document
+                .getElementById("backButton")
+                .classList.add("hidden");
+
+              document
+                .getElementById("cancelButton")
+                .classList.add("hidden");
+            },
+          )
+          .withFailureHandler(
+            function (error) {
+              console.error(
+                "LIFF保存通信エラー",
+                error,
+              );
+
+              saveButton.disabled = false;
+              saveButton.textContent = "保存する";
+
+              confirmationMessage.textContent =
+                "通信に失敗しました。\n" +
+                "もう一度お試しください。";
+            },
+          )
+          .saveGardenLogFromLiff({
+            idToken: idToken,
+            gardenLog: gardenLog,
+          });
+      } catch (error) {
+        console.error("LIFF保存エラー", error);
+
+        saveButton.disabled = false;
+        saveButton.textContent = "保存する";
+
+        confirmationMessage.textContent =
+          error.message ||
+          "記録を保存できませんでした。";
+      }
+    },
+  );
+
+      window.addEventListener(
+        "load",
+        function () {
+          setToday();
+          initializeLiff();
+        },
+      );
+    </script>
+  </body>
+</html>

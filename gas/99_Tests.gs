@@ -55,3 +55,35 @@ function testIsAllowedLineUser() {
 
   debugLog("未許可ユーザー判定: " + isAllowedLineUser(deniedEvent));
 }
+
+/**
+ * LIFFから送る7項目形式と、既存の5項目形式を確認する。
+ */
+function testValidateLiffGardenLogText() {
+  var liffResult = validateAndParseText(
+    "2026/07/29_自宅_庭__アジサイ_水やり_元気です",
+  );
+
+  if (
+    !liffResult.isValid ||
+    liffResult.data.base !== "自宅" ||
+    liffResult.data.detailPlace !== "" ||
+    liffResult.data.memo !== "元気です"
+  ) {
+    throw new Error("LIFFの7項目形式を正しく解析できませんでした");
+  }
+
+  var legacyResult = validateAndParseText(
+    "2026/07/29_庭_北側_アジサイ_剪定",
+  );
+
+  if (
+    !legacyResult.isValid ||
+    legacyResult.data.base !== "" ||
+    legacyResult.data.memo !== ""
+  ) {
+    throw new Error("既存の5項目形式を正しく解析できませんでした");
+  }
+
+  debugLog("LIFF形式・既存形式の解析テストに成功しました");
+}
