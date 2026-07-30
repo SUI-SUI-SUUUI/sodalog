@@ -20,16 +20,23 @@
  * 3. デフォルト設定
  */
 function setupRichMenu() {
+  var properties = PropertiesService.getScriptProperties();
+  var previousRichMenuId = properties.getProperty("RICH_MENU_ID");
   var richMenuId = createMyGardenLabRichMenu();
 
   uploadRichMenuImage(richMenuId);
 
   setDefaultRichMenu(richMenuId);
 
-  PropertiesService.getScriptProperties().setProperty(
-    "RICH_MENU_ID",
-    richMenuId,
-  );
+  properties.setProperty("RICH_MENU_ID", richMenuId);
+
+  if (previousRichMenuId && previousRichMenuId !== richMenuId) {
+    try {
+      deleteRichMenuById(previousRichMenuId);
+    } catch (error) {
+      debugLog("以前のリッチメニュー削除エラー: " + error);
+    }
+  }
 
   debugLog("リッチメニュー設定完了: " + richMenuId);
 }
@@ -57,9 +64,9 @@ function createMyGardenLabRichMenu() {
           height: 843,
         },
         action: {
-          type: "message",
+          type: "uri",
           label: "記録する",
-          text: "記録する",
+          uri: "https://liff.line.me/2010871516-DJ2YSRIw",
         },
       },
       {

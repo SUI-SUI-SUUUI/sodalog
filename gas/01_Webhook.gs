@@ -226,7 +226,24 @@ function handleTextMessage(event) {
     ]),
   );
 
-  debugLog("スプレッドシートへの記録完了");
+  var savedRow = sheet.getLastRow();
+
+  saveUserSession(userId, {
+    step: "WAITING_PHOTO_CHOICE",
+    workDate: parsed.workDate,
+    base: parsed.base,
+    place: parsed.place,
+    detailPlace: parsed.detailPlace,
+    plantName: parsed.plant,
+    workType: parsed.task,
+    memo: parsed.memo,
+    savedRow: savedRow,
+  });
+
+  debugLog(
+    "スプレッドシートへの記録完了: row=" + savedRow +
+      ", 画像追加待ちセッションを保存しました",
+  );
 
   replyMessage(
     replyToken,
@@ -249,6 +266,7 @@ function handleTextMessage(event) {
       (parsed.memo ? "\nメモ: " + parsed.memo : "") +
       "\n\n" +
       "続けて画像を送ると、この記録に追加されます。",
+    buildPhotoChoiceQuickReplyActions(),
   );
 }
 
