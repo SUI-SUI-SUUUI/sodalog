@@ -113,6 +113,46 @@ function testGetAlbumRecordsForAllowedUser() {
 }
 
 /**
+ * isFileOwnedByUser の動作確認用。
+ * ALLOWED_LINE_USER_ID の記録から画像ありの1件を探し、
+ * 本人所有と判定されること・別ユーザーIDでは拒否されることを確認する。
+ * デプロイ不要。GASエディタから直接実行して確認する。
+ */
+function testIsFileOwnedByUser() {
+  var allowedUserId = PropertiesService.getScriptProperties().getProperty(
+    "ALLOWED_LINE_USER_ID",
+  );
+
+  if (!allowedUserId) {
+    debugLog("ALLOWED_LINE_USER_ID が未設定です。");
+    return;
+  }
+
+  var records = getAlbumRecordsForUser(allowedUserId, 50);
+
+  var recordWithImage = records.filter(function (record) {
+    return record.hasImage && record.imageFileId;
+  })[0];
+
+  if (!recordWithImage) {
+    debugLog("画像付きの記録が見つかりませんでした。写真付きで1件記録してから再実行してください。");
+    return;
+  }
+
+  var ownedResult = isFileOwnedByUser(allowedUserId, recordWithImage.imageFileId);
+  var deniedResult = isFileOwnedByUser("U_TEST_DENIED_USER", recordWithImage.imageFileId);
+
+  debugLog("本人所有判定: " + ownedResult);
+  debugLog("別ユーザー判定: " + deniedResult);
+
+  if (!ownedResult || deniedResult) {
+    throw new Error("isFileOwnedByUserの判定結果が想定と異なります");
+  }
+
+  debugLog("isFileOwnedByUserのテストに成功しました");
+}
+
+/**
  * extractDriveFileId の動作確認用
  */
 function testExtractDriveFileId() {

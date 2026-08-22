@@ -114,6 +114,10 @@ function doGet(e) {
     return handleAlbumListRequest(e);
   }
 
+  if (action === "image") {
+    return handleAlbumImageRequest(e);
+  }
+
   return ContentService.createTextOutput("そだログ Webhook is running.");
 }
 
