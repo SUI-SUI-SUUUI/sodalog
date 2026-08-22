@@ -87,3 +87,43 @@ function testValidateLiffGardenLogText() {
 
   debugLog("LIFF形式・既存形式の解析テストに成功しました");
 }
+
+/**
+ * アルバム一覧取得（getAlbumRecordsForUser）の動作確認用。
+ * ALLOWED_LINE_USER_ID の記録を取得し、件数と先頭1件をログへ出す。
+ * デプロイ不要。GASエディタから直接実行して確認する。
+ */
+function testGetAlbumRecordsForAllowedUser() {
+  var allowedUserId = PropertiesService.getScriptProperties().getProperty(
+    "ALLOWED_LINE_USER_ID",
+  );
+
+  if (!allowedUserId) {
+    debugLog("ALLOWED_LINE_USER_ID が未設定です。");
+    return;
+  }
+
+  var records = getAlbumRecordsForUser(allowedUserId, 50);
+
+  debugLog("アルバム取得件数: " + records.length);
+
+  if (records.length > 0) {
+    debugLog("先頭1件: " + JSON.stringify(records[0]));
+  }
+}
+
+/**
+ * extractDriveFileId の動作確認用
+ */
+function testExtractDriveFileId() {
+  var sampleUrl =
+    "https://drive.google.com/file/d/1AbCdEfGhIjKlMnOpQrStUvWxYz/view?usp=drivesdk";
+
+  var fileId = extractDriveFileId(sampleUrl);
+
+  if (fileId !== "1AbCdEfGhIjKlMnOpQrStUvWxYz") {
+    throw new Error("DriveファイルURLからIDを取り出せませんでした");
+  }
+
+  debugLog("extractDriveFileIdのテストに成功しました");
+}

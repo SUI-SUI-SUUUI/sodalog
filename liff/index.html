@@ -103,6 +103,31 @@
       }
 
       .tab-panel.hidden { display: none; }
+
+      .album-list { margin: 0; padding: 0; list-style: none; }
+
+      .album-item { padding: 16px 0; border-bottom: 1px solid #e2e8e2; }
+
+      .album-item:first-child { border-top: 1px solid #e2e8e2; }
+
+      .album-date { margin: 0 0 4px; color: #687368; font-size: 13px; }
+
+      .album-title { margin: 0 0 4px; font-weight: 700; }
+
+      .album-meta { margin: 0 0 4px; color: #586458; font-size: 13px; }
+
+      .album-memo { margin: 8px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+      .album-photo-badge {
+        display: inline-block;
+        margin-top: 8px;
+        padding: 3px 10px;
+        border-radius: 999px;
+        background: #e8f2e9;
+        color: #3f6546;
+        font-size: 12px;
+        font-weight: 700;
+      }
     </style>
   </head>
   <body>
@@ -189,7 +214,9 @@
       <div id="albumTab" class="tab-panel hidden">
         <section class="card">
           <h1>アルバム</h1>
-          <p class="description">これまでの記録を振り返れる機能です。近日公開予定です。</p>
+          <p class="description">これまでの記録を新しい順に振り返れます。</p>
+          <p id="albumStatus" class="status">読み込み中です。</p>
+          <ul id="albumList" class="album-list"></ul>
         </section>
       </div>
 
@@ -203,6 +230,8 @@
 
     <script>
       const LIFF_ID = "2010871516-DJ2YSRIw";
+      const WEBAPP_URL =
+        "https://script.google.com/macros/s/AKfycbzz73ibrR35BIh5cWmkn8bNQO3AxgtHQItgqyFaeDzpJqj2pMXN04IFbI9xkcOijLUy/exec";
       const formScreen = document.getElementById("formScreen");
       const confirmationScreen = document.getElementById("confirmationScreen");
       const form = document.getElementById("gardenLogForm");
@@ -337,6 +366,99 @@
       setToday();
       initializeLiff();
 
+      function formatSlashDate(value) {
+        const parts = String(value || "").split("/");
+        return parts.length === 3
+          ? parts[0] + "年" + Number(parts[1]) + "月" + Number(parts[2]) + "日"
+          : value;
+      }
+
+      function renderAlbumRecords(records) {
+        const list = document.getElementById("albumList");
+        list.replaceChildren();
+
+        records.forEach(function (record) {
+          const item = document.createElement("li");
+          item.className = "album-item";
+
+          const date = document.createElement("p");
+          date.className = "album-date";
+          date.textContent = formatSlashDate(record.workDate);
+
+          const title = document.createElement("p");
+          title.className = "album-title";
+          title.textContent = [record.plant, record.task].filter(Boolean).join("・");
+
+          const meta = document.createElement("p");
+          meta.className = "album-meta";
+          meta.textContent =
+            [record.place, record.detailPlace].filter(Boolean).join(" / ") || "場所未設定";
+
+          item.append(date, title, meta);
+
+          if (record.memo) {
+            const memo = document.createElement("p");
+            memo.className = "album-memo";
+            memo.textContent = record.memo;
+            item.append(memo);
+          }
+
+          if (record.hasImage) {
+            const badge = document.createElement("span");
+            badge.className = "album-photo-badge";
+            badge.textContent = "📷 写真あり";
+            item.append(badge);
+          }
+
+          list.append(item);
+        });
+      }
+
+      let albumLoading = false;
+
+      async function loadAlbum() {
+        if (albumLoading) {
+          return;
+        }
+        albumLoading = true;
+
+        const albumStatus = document.getElementById("albumStatus");
+        albumStatus.classList.remove("error");
+        albumStatus.textContent = "読み込み中です。";
+        document.getElementById("albumList").replaceChildren();
+
+        try {
+          if (!liff.isLoggedIn()) {
+            throw new Error("LINEにログインしていません。LINEアプリから開き直してください。");
+          }
+
+          const idToken = liff.getIDToken();
+          const response = await fetch(
+            WEBAPP_URL + "?action=list&idToken=" + encodeURIComponent(idToken),
+          );
+          const data = await response.json();
+
+          if (!data.success) {
+            throw new Error(data.message || "記録を取得できませんでした。");
+          }
+
+          if (data.records.length === 0) {
+            albumStatus.textContent = "まだ記録がありません。";
+            return;
+          }
+
+          albumStatus.textContent = "";
+          renderAlbumRecords(data.records);
+        } catch (error) {
+          console.error("アルバム取得エラー", error);
+          albumStatus.classList.add("error");
+          albumStatus.textContent =
+            error.message || "記録を取得できませんでした。時間をおいて開き直してください。";
+        } finally {
+          albumLoading = false;
+        }
+      }
+
       const tabPanels = {
         record: document.getElementById("recordTab"),
         album: document.getElementById("albumTab"),
@@ -353,6 +475,10 @@
           Object.keys(tabPanels).forEach(function (key) {
             tabPanels[key].classList.toggle("hidden", key !== button.dataset.tab);
           });
+
+          if (button.dataset.tab === "album") {
+            loadAlbum();
+          }
 
           window.scrollTo({ top: 0, behavior: "smooth" });
         });

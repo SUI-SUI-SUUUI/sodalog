@@ -105,9 +105,15 @@ function isAllowedLineUser(event) {
 }
 
 /**
- * ブラウザ確認用
+ * ブラウザ確認用、および action パラメータによるAPI分岐
  */
 function doGet(e) {
+  var action = e && e.parameter ? e.parameter.action : "";
+
+  if (action === "list") {
+    return handleAlbumListRequest(e);
+  }
+
   return ContentService.createTextOutput("そだログ Webhook is running.");
 }
 
