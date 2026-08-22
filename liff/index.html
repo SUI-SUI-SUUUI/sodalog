@@ -77,80 +77,128 @@
       .label { display: block; margin-bottom: 4px; color: #687368; font-size: 13px; }
 
       .value { white-space: pre-wrap; overflow-wrap: anywhere; font-weight: 700; }
+
+      .tabbar {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+        margin: 0 0 16px;
+      }
+
+      .tab-button {
+        padding: 12px 8px;
+        border: 1px solid #cdd8cd;
+        border-radius: 10px;
+        background: #fff;
+        color: #586458;
+        font: inherit;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      .tab-button.active {
+        border-color: #4f7956;
+        background: #e8f2e9;
+        color: #263326;
+      }
+
+      .tab-panel.hidden { display: none; }
     </style>
   </head>
   <body>
     <main>
-      <section id="formScreen" class="card">
-        <h1>園芸記録を追加</h1>
-        <p class="description">今日の作業内容を入力してください。</p>
-        <p id="status" class="status">LINEとの接続を確認しています。</p>
+      <div class="tabbar">
+        <button class="tab-button active" type="button" data-tab="record">①記録する</button>
+        <button class="tab-button" type="button" data-tab="album">②アルバム</button>
+        <button class="tab-button" type="button" data-tab="consult">③相談</button>
+      </div>
 
-        <form id="gardenLogForm">
-          <div class="field">
-            <label for="workDate">作業日</label>
-            <input id="workDate" type="date" required>
-          </div>
-          <div class="field">
-            <label for="base">育成拠点</label>
-            <select id="base" required>
-              <option value="">選択してください</option>
-              <option value="自宅">自宅</option>
-            </select>
-          </div>
-          <div class="field">
-            <label for="place">場所</label>
-            <select id="place" required>
-              <option value="">選択してください</option>
-              <option value="庭">庭</option>
-              <option value="室内">室内</option>
-              <option value="その他">その他</option>
-            </select>
-          </div>
-          <div class="field">
-            <label for="detailPlace">詳細場所</label>
-            <select id="detailPlace">
-              <option value="">省略する</option>
-              <option value="北側">北側</option>
-              <option value="南側">南側</option>
-              <option value="中央">中央</option>
-              <option value="東側">東側</option>
-              <option value="西側">西側</option>
-            </select>
-          </div>
-          <div class="field">
-            <label for="plant">植物名</label>
-            <input id="plant" type="text" placeholder="例：アジサイ" required>
-          </div>
-          <div class="field">
-            <span class="field-title">作業内容</span>
-            <div class="tasks">
-              <label class="task"><input type="radio" name="task" value="水やり" required><span>水やり</span></label>
-              <label class="task"><input type="radio" name="task" value="肥料"><span>肥料</span></label>
-              <label class="task"><input type="radio" name="task" value="収穫"><span>収穫</span></label>
-              <label class="task"><input type="radio" name="task" value="剪定"><span>剪定</span></label>
-              <label class="task"><input type="radio" name="task" value="草取り"><span>草取り</span></label>
-              <label class="task"><input type="radio" name="task" value="植え付け"><span>植え付け</span></label>
-              <label class="task"><input type="radio" name="task" value="成長記録"><span>成長記録</span></label>
-              <label class="task"><input type="radio" name="task" value="その他"><span>その他</span></label>
+      <div id="recordTab" class="tab-panel">
+        <section id="formScreen" class="card">
+          <h1>園芸記録を追加</h1>
+          <p class="description">今日の作業内容を入力してください。</p>
+          <p id="status" class="status">LINEとの接続を確認しています。</p>
+
+          <form id="gardenLogForm">
+            <div class="field">
+              <label for="workDate">作業日</label>
+              <input id="workDate" type="date" required>
             </div>
-          </div>
-          <div class="field">
-            <label for="memo">メモ</label>
-            <textarea id="memo" placeholder="省略できます"></textarea>
-          </div>
-          <button class="primary" type="submit">内容を確認する</button>
-        </form>
-      </section>
+            <div class="field">
+              <label for="base">育成拠点</label>
+              <select id="base" required>
+                <option value="">選択してください</option>
+                <option value="自宅">自宅</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="place">場所</label>
+              <select id="place" required>
+                <option value="">選択してください</option>
+                <option value="庭">庭</option>
+                <option value="室内">室内</option>
+                <option value="その他">その他</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="detailPlace">詳細場所</label>
+              <select id="detailPlace">
+                <option value="">省略する</option>
+                <option value="北側">北側</option>
+                <option value="南側">南側</option>
+                <option value="中央">中央</option>
+                <option value="東側">東側</option>
+                <option value="西側">西側</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="plant">植物名</label>
+              <input id="plant" type="text" placeholder="例：アジサイ" required>
+            </div>
+            <div class="field">
+              <span class="field-title">作業内容</span>
+              <div class="tasks">
+                <label class="task"><input type="radio" name="task" value="水やり" required><span>水やり</span></label>
+                <label class="task"><input type="radio" name="task" value="肥料"><span>肥料</span></label>
+                <label class="task"><input type="radio" name="task" value="収穫"><span>収穫</span></label>
+                <label class="task"><input type="radio" name="task" value="剪定"><span>剪定</span></label>
+                <label class="task"><input type="radio" name="task" value="草取り"><span>草取り</span></label>
+                <label class="task"><input type="radio" name="task" value="植え付け"><span>植え付け</span></label>
+                <label class="task"><input type="radio" name="task" value="成長記録"><span>成長記録</span></label>
+                <label class="task"><input type="radio" name="task" value="その他"><span>その他</span></label>
+              </div>
+            </div>
+            <div class="field">
+              <label for="memo">メモ</label>
+              <textarea id="memo" placeholder="省略できます"></textarea>
+            </div>
+            <button class="primary" type="submit">内容を確認する</button>
+          </form>
+        </section>
 
-      <section id="confirmationScreen" class="card hidden">
-        <h1>入力内容の確認</h1>
-        <p class="description">この内容でLINEに送信して記録しますか？</p>
-        <ul id="confirmation" class="confirmation"></ul>
-        <button id="saveButton" class="primary" type="button">LINEへ送信して記録する</button>
-        <button id="backButton" class="secondary" type="button">入力画面に戻る</button>
-        <p id="confirmationStatus" class="status hidden"></p>
-      </section>
+        <section id="confirmationScreen" class="card hidden">
+          <h1>入力内容の確認</h1>
+          <p class="description">この内容でLINEに送信して記録しますか？</p>
+          <ul id="confirmation" class="confirmation"></ul>
+          <button id="saveButton" class="primary" type="button">LINEへ送信して記録する</button>
+          <button id="backButton" class="secondary" type="button">入力画面に戻る</button>
+          <p id="confirmationStatus" class="status hidden"></p>
+        </section>
+      </div>
+
+      <div id="albumTab" class="tab-panel hidden">
+        <section class="card">
+          <h1>アルバム</h1>
+          <p class="description">これまでの記録を振り返れる機能です。近日公開予定です。</p>
+        </section>
+      </div>
+
+      <div id="consultTab" class="tab-panel hidden">
+        <section class="card">
+          <h1>相談</h1>
+          <p class="description">準備中です。</p>
+        </section>
+      </div>
     </main>
 
     <script>
@@ -288,6 +336,27 @@
 
       setToday();
       initializeLiff();
+
+      const tabPanels = {
+        record: document.getElementById("recordTab"),
+        album: document.getElementById("albumTab"),
+        consult: document.getElementById("consultTab"),
+      };
+
+      document.querySelectorAll(".tab-button").forEach(function (button) {
+        button.addEventListener("click", function () {
+          document.querySelectorAll(".tab-button").forEach(function (b) {
+            b.classList.remove("active");
+          });
+          button.classList.add("active");
+
+          Object.keys(tabPanels).forEach(function (key) {
+            tabPanels[key].classList.toggle("hidden", key !== button.dataset.tab);
+          });
+
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        });
+      });
     </script>
   </body>
 </html>
