@@ -134,6 +134,42 @@
         margin-top: 10px;
         max-width: 100%;
         border-radius: 10px;
+        cursor: zoom-in;
+      }
+
+      .modal-overlay {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        background: rgba(20, 26, 20, .9);
+        z-index: 100;
+      }
+
+      .modal-overlay.hidden { display: none; }
+
+      .modal-image {
+        max-width: 100%;
+        max-height: 100%;
+        border-radius: 10px;
+      }
+
+      .modal-close {
+        position: absolute;
+        top: 16px;
+        right: 16px;
+        width: 40px;
+        height: 40px;
+        padding: 0;
+        border: 0;
+        border-radius: 50%;
+        background: #fff;
+        color: #263326;
+        font-size: 22px;
+        line-height: 1;
+        cursor: pointer;
       }
     </style>
   </head>
@@ -232,6 +268,11 @@
           <h1>相談</h1>
           <p class="description">準備中です。</p>
         </section>
+      </div>
+
+      <div id="photoModal" class="modal-overlay hidden">
+        <button id="photoModalClose" class="modal-close" type="button" aria-label="閉じる">×</button>
+        <img id="photoModalImage" class="modal-image" alt="">
       </div>
     </main>
 
@@ -428,6 +469,27 @@
         });
       }
 
+      const photoModal = document.getElementById("photoModal");
+      const photoModalImage = document.getElementById("photoModalImage");
+
+      function openPhotoModal(src) {
+        photoModalImage.src = src;
+        photoModal.classList.remove("hidden");
+      }
+
+      function closePhotoModal() {
+        photoModal.classList.add("hidden");
+        photoModalImage.src = "";
+      }
+
+      document.getElementById("photoModalClose").addEventListener("click", closePhotoModal);
+
+      photoModal.addEventListener("click", function (event) {
+        if (event.target === photoModal) {
+          closePhotoModal();
+        }
+      });
+
       async function loadAlbumImage(fileId, badgeElement, itemElement) {
         try {
           const idToken = liff.getIDToken();
@@ -449,6 +511,9 @@
           img.className = "album-photo";
           img.alt = "";
           img.src = "data:" + data.mimeType + ";base64," + data.base64;
+          img.addEventListener("click", function () {
+            openPhotoModal(img.src);
+          });
           itemElement.insertBefore(img, badgeElement);
           badgeElement.remove();
         } catch (error) {
