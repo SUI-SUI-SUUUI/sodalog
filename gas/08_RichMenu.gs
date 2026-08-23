@@ -66,7 +66,7 @@ function createMyGardenLabRichMenu() {
         action: {
           type: "uri",
           label: "記録する",
-          uri: "https://liff.line.me/2010871516-DJ2YSRIw",
+          uri: "https://liff.line.me/2010871516-DJ2YSRIw?tab=record",
         },
       },
       {
@@ -77,9 +77,9 @@ function createMyGardenLabRichMenu() {
           height: 843,
         },
         action: {
-          type: "message",
-          label: "最近の記録",
-          text: "最近の記録",
+          type: "uri",
+          label: "アルバム",
+          uri: "https://liff.line.me/2010871516-DJ2YSRIw?tab=album",
         },
       },
       {
@@ -90,9 +90,9 @@ function createMyGardenLabRichMenu() {
           height: 843,
         },
         action: {
-          type: "message",
-          label: "使い方",
-          text: "使い方",
+          type: "uri",
+          label: "相談",
+          uri: "https://liff.line.me/2010871516-DJ2YSRIw?tab=consult",
         },
       },
     ],

@@ -573,24 +573,35 @@
         consult: document.getElementById("consultTab"),
       };
 
+      function activateTab(tabKey) {
+        if (!tabPanels[tabKey]) {
+          return;
+        }
+
+        document.querySelectorAll(".tab-button").forEach(function (button) {
+          button.classList.toggle("active", button.dataset.tab === tabKey);
+        });
+
+        Object.keys(tabPanels).forEach(function (key) {
+          tabPanels[key].classList.toggle("hidden", key !== tabKey);
+        });
+
+        if (tabKey === "album") {
+          loadAlbum();
+        }
+      }
+
       document.querySelectorAll(".tab-button").forEach(function (button) {
         button.addEventListener("click", function () {
-          document.querySelectorAll(".tab-button").forEach(function (b) {
-            b.classList.remove("active");
-          });
-          button.classList.add("active");
-
-          Object.keys(tabPanels).forEach(function (key) {
-            tabPanels[key].classList.toggle("hidden", key !== button.dataset.tab);
-          });
-
-          if (button.dataset.tab === "album") {
-            loadAlbum();
-          }
-
+          activateTab(button.dataset.tab);
           window.scrollTo({ top: 0, behavior: "smooth" });
         });
       });
+
+      const initialTab = new URLSearchParams(window.location.search).get("tab");
+      if (initialTab) {
+        activateTab(initialTab);
+      }
     </script>
   </body>
 </html>

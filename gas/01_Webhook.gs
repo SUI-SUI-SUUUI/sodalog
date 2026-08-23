@@ -167,11 +167,6 @@ function handleTextMessage(event) {
     return;
   }
 
-  if (text === "最近の記録" || text === "最近" || text === "履歴") {
-    replyRecentGardenLogs(userId, replyToken);
-    return;
-  }
-
   if (text === "使い方" || text === "ヘルプ" || text === "メニュー") {
     replyHelpMessage(replyToken);
     return;
@@ -194,9 +189,6 @@ function handleTextMessage(event) {
       [
         "番号を選びながら記録する場合は、",
         "「記録する」と送ってください。",
-        "",
-        "最近の記録を見る場合は、",
-        "「最近の記録」と送ってください。",
         "",
         "操作方法を見る場合は、",
         "「使い方」と送ってください。",
