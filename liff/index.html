@@ -505,6 +505,7 @@
       }
 
       const PLACE_ORDER = ["庭", "室内", "その他"];
+      const DETAIL_ORDER = ["北側", "南側", "中央", "東側", "西側"];
 
       function placeLabel(place) {
         return place || "場所未設定";
@@ -514,21 +515,35 @@
         return plant || "植物名未設定";
       }
 
-      function sortPlaces(places) {
-        return places.sort(function (a, b) {
-          var indexA = PLACE_ORDER.indexOf(a);
-          var indexB = PLACE_ORDER.indexOf(b);
-          if (indexA === -1 && indexB === -1) {
-            return a.localeCompare(b, "ja");
-          }
-          if (indexA === -1) {
-            return 1;
-          }
-          if (indexB === -1) {
-            return -1;
-          }
-          return indexA - indexB;
-        });
+      function zoneDisplayLabel(place, detailPlace) {
+        return detailPlace ? place + "・" + detailPlace : place;
+      }
+
+      function orderIndex(list, value) {
+        const index = list.indexOf(value);
+        return index === -1 ? list.length : index;
+      }
+
+      function compareZones(a, b) {
+        const placeDiff = orderIndex(PLACE_ORDER, a.place) - orderIndex(PLACE_ORDER, b.place);
+        if (placeDiff !== 0) {
+          return placeDiff;
+        }
+        if (!a.detailPlace && !b.detailPlace) {
+          return 0;
+        }
+        if (!a.detailPlace) {
+          return -1;
+        }
+        if (!b.detailPlace) {
+          return 1;
+        }
+        const detailDiff =
+          orderIndex(DETAIL_ORDER, a.detailPlace) - orderIndex(DETAIL_ORDER, b.detailPlace);
+        if (detailDiff !== 0) {
+          return detailDiff;
+        }
+        return a.detailPlace.localeCompare(b.detailPlace, "ja");
       }
 
       function buildGroupItem(title, meta) {
@@ -573,41 +588,53 @@
         backButton.onclick = onBack || null;
       }
 
-      function renderAlbumPlaces() {
+      function renderAlbumZones() {
         setAlbumHeader("アルバム", "", false, null);
 
-        const placeMap = new Map();
+        const zoneMap = new Map();
         albumRecords.forEach(function (record) {
-          const key = placeLabel(record.place);
-          if (!placeMap.has(key)) {
-            placeMap.set(key, { count: 0, latestDate: record.workDate });
+          const place = placeLabel(record.place);
+          const detailPlace = record.detailPlace || "";
+          const key = place + " " + detailPlace;
+          if (!zoneMap.has(key)) {
+            zoneMap.set(key, {
+              place: place,
+              detailPlace: detailPlace,
+              count: 0,
+              latestDate: record.workDate,
+            });
           }
-          placeMap.get(key).count += 1;
+          zoneMap.get(key).count += 1;
         });
+
+        const zones = Array.from(zoneMap.values()).sort(compareZones);
 
         const list = document.getElementById("albumList");
         list.replaceChildren();
 
-        sortPlaces(Array.from(placeMap.keys())).forEach(function (place) {
-          const info = placeMap.get(place);
+        zones.forEach(function (zone) {
           const item = buildGroupItem(
-            place,
-            info.count + "件・最新 " + formatSlashDate(info.latestDate),
+            zoneDisplayLabel(zone.place, zone.detailPlace),
+            zone.count + "件・最新 " + formatSlashDate(zone.latestDate),
           );
           item.addEventListener("click", function () {
-            renderAlbumPlants(place);
+            renderAlbumPlants(zone.place, zone.detailPlace);
           });
           list.append(item);
         });
       }
 
-      function renderAlbumPlants(place) {
-        setAlbumHeader(place + "の植物", place, true, renderAlbumPlaces);
+      function renderAlbumPlants(place, detailPlace) {
+        const zoneName = zoneDisplayLabel(place, detailPlace);
+        setAlbumHeader(zoneName + "の植物", zoneName, true, renderAlbumZones);
 
         const plantMap = new Map();
         albumRecords
           .filter(function (record) {
-            return placeLabel(record.place) === place;
+            return (
+              placeLabel(record.place) === place &&
+              (record.detailPlace || "") === detailPlace
+            );
           })
           .forEach(function (record) {
             const key = plantLabel(record.plant);
@@ -631,20 +658,22 @@
               info.count + "件・最新 " + formatSlashDate(info.latestDate),
             );
             item.addEventListener("click", function () {
-              renderAlbumRecordsFiltered(place, plant);
+              renderAlbumRecordsFiltered(place, detailPlace, plant);
             });
             list.append(item);
           });
       }
 
-      function renderAlbumRecordsFiltered(place, plant) {
-        setAlbumHeader(plant, place + " › " + plant, true, function () {
-          renderAlbumPlants(place);
+      function renderAlbumRecordsFiltered(place, detailPlace, plant) {
+        const zoneName = zoneDisplayLabel(place, detailPlace);
+        setAlbumHeader(plant, zoneName + " › " + plant, true, function () {
+          renderAlbumPlants(place, detailPlace);
         });
 
         const filtered = albumRecords.filter(function (record) {
           return (
             placeLabel(record.place) === place &&
+            (record.detailPlace || "") === detailPlace &&
             plantLabel(record.plant) === plant
           );
         });
@@ -741,7 +770,7 @@
 
           albumStatus.textContent = "";
           albumRecords = data.records;
-          renderAlbumPlaces();
+          renderAlbumZones();
         } catch (error) {
           console.error("アルバム取得エラー", error);
           albumStatus.classList.add("error");

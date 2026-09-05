@@ -78,7 +78,7 @@ function getAlbumRecordsForUser(userId, limit) {
 
     records.push({
       recordedAtMs: recordedAt instanceof Date ? recordedAt.getTime() : 0,
-      workDate: String(row[1] || ""),
+      workDate: formatSheetWorkDate(row[1]),
       place: String(row[2] || ""),
       detailPlace: String(row[3] || ""),
       plant: String(row[4] || ""),

@@ -133,6 +133,21 @@ function normalizeDateText(dateText) {
 }
 
 /**
+ * スプレッドシートから読み取った作業日をyyyy/MM/dd形式の文字列にする
+ *
+ * Google Sheetsは "2026/09/05" のような文字列を書き込んでも
+ * 列の書式によっては日付型として保存することがあるため、
+ * 読み取り側でDate/文字列どちらでも同じ形式に揃える。
+ */
+function formatSheetWorkDate(value) {
+  if (value instanceof Date) {
+    return Utilities.formatDate(value, Session.getScriptTimeZone(), "yyyy/MM/dd");
+  }
+
+  return String(value || "");
+}
+
+/**
  * 作業日を利用者向けの日本語表記にする
  * 例：2026年7月22日（水）
  */
