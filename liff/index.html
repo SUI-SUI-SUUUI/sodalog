@@ -149,6 +149,17 @@
 
       .album-meta { margin: 0 0 4px; color: #586458; font-size: 13px; }
 
+      .album-task {
+        display: inline-block;
+        margin: 0 0 4px;
+        padding: 4px 12px;
+        border-radius: 999px;
+        background: #eef6ee;
+        color: #3f6546;
+        font-size: 14px;
+        font-weight: 700;
+      }
+
       .album-memo { margin: 8px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 
       .album-photo-badge {
@@ -456,6 +467,20 @@
           : value;
       }
 
+      const TASK_ICONS = {
+        水やり: "💧",
+        肥料: "🧪",
+        収穫: "🌾",
+        剪定: "✂️",
+        草取り: "🌿",
+        植え付け: "🌱",
+        成長記録: "📷",
+      };
+
+      function taskIcon(task) {
+        return TASK_ICONS[task] || "🔖";
+      }
+
       function renderAlbumRecords(records) {
         const list = document.getElementById("albumList");
         list.replaceChildren();
@@ -468,16 +493,11 @@
           date.className = "album-date";
           date.textContent = formatSlashDate(record.workDate);
 
-          const title = document.createElement("p");
-          title.className = "album-title";
-          title.textContent = [record.plant, record.task].filter(Boolean).join("・");
+          const task = document.createElement("p");
+          task.className = "album-task";
+          task.textContent = taskIcon(record.task) + " " + (record.task || "記録");
 
-          const meta = document.createElement("p");
-          meta.className = "album-meta";
-          meta.textContent =
-            [record.place, record.detailPlace].filter(Boolean).join(" / ") || "場所未設定";
-
-          item.append(date, title, meta);
+          item.append(date, task);
 
           if (record.memo) {
             const memo = document.createElement("p");
