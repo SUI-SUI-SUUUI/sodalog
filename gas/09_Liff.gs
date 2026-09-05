@@ -92,7 +92,32 @@ function saveGardenLogFromLiff(requestData) {
  * @param {string} idToken LIFFで取得したIDトークン
  * @return {Object} 検証済みユーザー情報
  */
+/**
+ * IDトークンをキャッシュキーに使える短い文字列にする
+ *
+ * CacheServiceのキーには長さ制限があり、
+ * IDトークン(JWT)はそのままでは使えないためハッシュ化する。
+ */
+function computeIdTokenCacheKey(idToken) {
+  var digest = Utilities.computeDigest(
+    Utilities.DigestAlgorithm.SHA_256,
+    String(idToken || ""),
+  );
+
+  return Utilities.base64EncodeWebSafe(digest);
+}
+
 function verifyLiffIdToken(idToken) {
+  var cache = CacheService.getScriptCache();
+  var cacheKey = "idtoken_" + computeIdTokenCacheKey(idToken);
+  var cachedUserId = cache.get(cacheKey);
+
+  if (cachedUserId) {
+    return {
+      userId: cachedUserId,
+    };
+  }
+
   var channelId =
     PropertiesService.getScriptProperties().getProperty(
       "LINE_LOGIN_CHANNEL_ID",
@@ -144,6 +169,13 @@ function verifyLiffIdToken(idToken) {
       "IDトークンのチャネルIDが一致しません",
     );
   }
+
+  /*
+   * 同じ画面表示中に写真を何枚も取得すると、その都度LINEへ
+   * トークン検証を問い合わせて遅くなるため、短時間だけ結果をキャッシュする。
+   * IDトークン自体の有効期限より十分短い5分にしている。
+   */
+  cache.put(cacheKey, String(tokenData.sub), 300);
 
   return {
     userId: String(tokenData.sub),

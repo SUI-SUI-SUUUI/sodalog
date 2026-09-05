@@ -143,6 +143,20 @@
 
       .album-breadcrumb { margin: 0 0 16px; color: #687368; font-size: 13px; }
 
+      .album-refresh-button {
+        width: auto;
+        margin: 0 0 16px;
+        padding: 6px 12px;
+        border: 1px solid #cdd8cd;
+        border-radius: 10px;
+        background: #fff;
+        color: #586458;
+        font: inherit;
+        font-size: 13px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
       .album-date { margin: 0 0 4px; color: #687368; font-size: 13px; }
 
       .album-title { margin: 0 0 4px; font-weight: 700; }
@@ -304,6 +318,7 @@
           <h1 id="albumTitle">アルバム</h1>
           <p id="albumBreadcrumb" class="album-breadcrumb hidden"></p>
           <p id="albumDescription" class="description">場所を選ぶと、その場所の植物ごとに記録を振り返れます。</p>
+          <button id="albumRefreshButton" class="album-refresh-button" type="button">🔄 最新の記録に更新</button>
           <p id="albumStatus" class="status">読み込み中です。</p>
           <ul id="albumList" class="album-list"></ul>
         </section>
@@ -716,6 +731,10 @@
 
       document.getElementById("photoModalClose").addEventListener("click", closePhotoModal);
 
+      document.getElementById("albumRefreshButton").addEventListener("click", function () {
+        loadAlbum(true);
+      });
+
       photoModal.addEventListener("click", function (event) {
         if (event.target === photoModal) {
           closePhotoModal();
@@ -757,10 +776,20 @@
       let albumLoading = false;
       let albumRecords = [];
 
-      async function loadAlbum() {
+      async function loadAlbum(forceRefresh) {
         if (albumLoading) {
           return;
         }
+
+        /*
+         * タブを行き来するたびに毎回スプレッドシート全件を読み直すと
+         * 遅いため、既に読み込み済みならキャッシュを使い回す。
+         * 記録を追加した直後などは「更新」ボタンで明示的に取り直す。
+         */
+        if (!forceRefresh && albumRecords.length > 0) {
+          return;
+        }
+
         albumLoading = true;
 
         const albumStatus = document.getElementById("albumStatus");
