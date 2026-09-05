@@ -110,6 +110,39 @@
 
       .album-item:first-child { border-top: 1px solid #e2e8e2; }
 
+      .album-group-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 14px 4px;
+        border-bottom: 1px solid #e2e8e2;
+        cursor: pointer;
+      }
+
+      .album-group-item:first-child { border-top: 1px solid #e2e8e2; }
+
+      .album-group-title { margin: 0 0 4px; font-weight: 700; }
+
+      .album-group-meta { margin: 0; color: #687368; font-size: 13px; }
+
+      .album-group-arrow { color: #9aa79a; font-size: 20px; }
+
+      .album-back-button {
+        width: auto;
+        margin: 0 0 16px;
+        padding: 8px 16px;
+        border: 1px solid #4f7956;
+        border-radius: 10px;
+        background: #fff;
+        color: #3f6546;
+        font: inherit;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      .album-breadcrumb { margin: 0 0 16px; color: #687368; font-size: 13px; }
+
       .album-date { margin: 0 0 4px; color: #687368; font-size: 13px; }
 
       .album-title { margin: 0 0 4px; font-weight: 700; }
@@ -256,8 +289,10 @@
 
       <div id="albumTab" class="tab-panel hidden">
         <section class="card">
-          <h1>アルバム</h1>
-          <p class="description">これまでの記録を新しい順に振り返れます。</p>
+          <button id="albumBackButton" class="album-back-button hidden" type="button">＜ 戻る</button>
+          <h1 id="albumTitle">アルバム</h1>
+          <p id="albumBreadcrumb" class="album-breadcrumb hidden"></p>
+          <p id="albumDescription" class="description">場所を選ぶと、その場所の植物ごとに記録を振り返れます。</p>
           <p id="albumStatus" class="status">読み込み中です。</p>
           <ul id="albumList" class="album-list"></ul>
         </section>
@@ -469,6 +504,154 @@
         });
       }
 
+      const PLACE_ORDER = ["庭", "室内", "その他"];
+
+      function placeLabel(place) {
+        return place || "場所未設定";
+      }
+
+      function plantLabel(plant) {
+        return plant || "植物名未設定";
+      }
+
+      function sortPlaces(places) {
+        return places.sort(function (a, b) {
+          var indexA = PLACE_ORDER.indexOf(a);
+          var indexB = PLACE_ORDER.indexOf(b);
+          if (indexA === -1 && indexB === -1) {
+            return a.localeCompare(b, "ja");
+          }
+          if (indexA === -1) {
+            return 1;
+          }
+          if (indexB === -1) {
+            return -1;
+          }
+          return indexA - indexB;
+        });
+      }
+
+      function buildGroupItem(title, meta) {
+        const item = document.createElement("li");
+        item.className = "album-group-item";
+
+        const text = document.createElement("div");
+        const titleEl = document.createElement("p");
+        titleEl.className = "album-group-title";
+        titleEl.textContent = title;
+        const metaEl = document.createElement("p");
+        metaEl.className = "album-group-meta";
+        metaEl.textContent = meta;
+        text.append(titleEl, metaEl);
+
+        const arrow = document.createElement("span");
+        arrow.className = "album-group-arrow";
+        arrow.textContent = "›";
+
+        item.append(text, arrow);
+        return item;
+      }
+
+      function setAlbumHeader(title, breadcrumbText, showBack, onBack) {
+        document.getElementById("albumTitle").textContent = title;
+
+        const breadcrumb = document.getElementById("albumBreadcrumb");
+        if (breadcrumbText) {
+          breadcrumb.textContent = breadcrumbText;
+          breadcrumb.classList.remove("hidden");
+        } else {
+          breadcrumb.classList.add("hidden");
+        }
+
+        document.getElementById("albumDescription").classList.toggle(
+          "hidden",
+          Boolean(breadcrumbText),
+        );
+
+        const backButton = document.getElementById("albumBackButton");
+        backButton.classList.toggle("hidden", !showBack);
+        backButton.onclick = onBack || null;
+      }
+
+      function renderAlbumPlaces() {
+        setAlbumHeader("アルバム", "", false, null);
+
+        const placeMap = new Map();
+        albumRecords.forEach(function (record) {
+          const key = placeLabel(record.place);
+          if (!placeMap.has(key)) {
+            placeMap.set(key, { count: 0, latestDate: record.workDate });
+          }
+          placeMap.get(key).count += 1;
+        });
+
+        const list = document.getElementById("albumList");
+        list.replaceChildren();
+
+        sortPlaces(Array.from(placeMap.keys())).forEach(function (place) {
+          const info = placeMap.get(place);
+          const item = buildGroupItem(
+            place,
+            info.count + "件・最新 " + formatSlashDate(info.latestDate),
+          );
+          item.addEventListener("click", function () {
+            renderAlbumPlants(place);
+          });
+          list.append(item);
+        });
+      }
+
+      function renderAlbumPlants(place) {
+        setAlbumHeader(place + "の植物", place, true, renderAlbumPlaces);
+
+        const plantMap = new Map();
+        albumRecords
+          .filter(function (record) {
+            return placeLabel(record.place) === place;
+          })
+          .forEach(function (record) {
+            const key = plantLabel(record.plant);
+            if (!plantMap.has(key)) {
+              plantMap.set(key, { count: 0, latestDate: record.workDate });
+            }
+            plantMap.get(key).count += 1;
+          });
+
+        const list = document.getElementById("albumList");
+        list.replaceChildren();
+
+        Array.from(plantMap.keys())
+          .sort(function (a, b) {
+            return a.localeCompare(b, "ja");
+          })
+          .forEach(function (plant) {
+            const info = plantMap.get(plant);
+            const item = buildGroupItem(
+              plant,
+              info.count + "件・最新 " + formatSlashDate(info.latestDate),
+            );
+            item.addEventListener("click", function () {
+              renderAlbumRecordsFiltered(place, plant);
+            });
+            list.append(item);
+          });
+      }
+
+      function renderAlbumRecordsFiltered(place, plant) {
+        setAlbumHeader(plant, place + " › " + plant, true, function () {
+          renderAlbumPlants(place);
+        });
+
+        const filtered = albumRecords.filter(function (record) {
+          return (
+            placeLabel(record.place) === place &&
+            plantLabel(record.plant) === plant
+          );
+        });
+
+        renderAlbumRecords(filtered);
+      }
+
       const photoModal = document.getElementById("photoModal");
       const photoModalImage = document.getElementById("photoModalImage");
 
@@ -523,6 +706,7 @@
       }
 
       let albumLoading = false;
+      let albumRecords = [];
 
       async function loadAlbum() {
         if (albumLoading) {
@@ -556,7 +740,8 @@
           }
 
           albumStatus.textContent = "";
-          renderAlbumRecords(data.records);
+          albumRecords = data.records;
+          renderAlbumPlaces();
         } catch (error) {
           console.error("アルバム取得エラー", error);
           albumStatus.classList.add("error");

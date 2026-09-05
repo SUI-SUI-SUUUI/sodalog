@@ -27,7 +27,11 @@ function handleAlbumListRequest(e) {
       });
     }
 
-    var records = getAlbumRecordsForUser(userId, 50);
+    /*
+     * 場所→植物名の絞り込みをアプリ側で行うため、
+     * 直近の一部だけでなく全履歴を取得する。
+     */
+    var records = getAlbumRecordsForUser(userId, 1000);
 
     return createJsonResponse({
       success: true,
