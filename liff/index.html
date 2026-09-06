@@ -128,6 +128,38 @@
 
       .album-group-arrow { color: #9aa79a; font-size: 20px; }
 
+      .album-list.album-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 16px;
+      }
+
+      .album-grid .album-group-item {
+        flex-direction: column;
+        align-items: stretch;
+        justify-content: flex-start;
+        gap: 6px;
+        padding: 0;
+        border: none;
+        cursor: pointer;
+      }
+
+      .album-grid .album-group-item:first-child { border-top: none; }
+
+      .album-grid .album-group-title {
+        margin: 0;
+        font-size: 14px;
+        text-align: center;
+      }
+
+      .album-grid .album-group-meta {
+        margin: 0;
+        font-size: 11px;
+        text-align: center;
+      }
+
+      .album-grid .album-group-arrow { display: none; }
+
       .album-group-thumb {
         width: 56px;
         height: 56px;
@@ -147,6 +179,15 @@
         justify-content: center;
         background: #eef2ee;
         font-size: 22px;
+      }
+
+      .album-grid .album-group-thumb,
+      .album-grid .album-group-thumb-placeholder {
+        width: 100%;
+        height: auto;
+        aspect-ratio: 1 / 1;
+        border-radius: 14px;
+        font-size: 40px;
       }
 
       .album-back-button {
@@ -509,6 +550,7 @@
 
       function renderAlbumRecords(records) {
         const list = document.getElementById("albumList");
+        list.classList.remove("album-grid");
         list.replaceChildren();
 
         records.forEach(function (record) {
@@ -692,6 +734,7 @@
         const zones = Array.from(zoneMap.values()).sort(compareZones);
 
         const list = document.getElementById("albumList");
+        list.classList.add("album-grid");
         list.replaceChildren();
 
         zones.forEach(function (zone) {
@@ -732,6 +775,7 @@
           });
 
         const list = document.getElementById("albumList");
+        list.classList.add("album-grid");
         list.replaceChildren();
 
         Array.from(plantMap.keys())
