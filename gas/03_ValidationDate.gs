@@ -37,21 +37,28 @@ function validateAndParseText(text) {
 
   var parts = String(text).trim().split("_");
 
-  if (parts.length !== 5 && parts.length !== 7) {
+  if (parts.length !== 5 && parts.length !== 6 && parts.length !== 7) {
     return {
       isValid: false,
       errorCode: "INVALID_ITEM_COUNT",
     };
   }
 
+  /*
+   * 5項目：旧形式(育成拠点・メモなし)
+   * 6項目：現行LIFF形式(育成拠点なし、メモあり。育成拠点は「自宅」固定)
+   * 7項目：旧LIFF形式(育成拠点・メモあり)
+   */
+  var hasBase = parts.length === 7;
+  var hasMemo = parts.length === 6 || parts.length === 7;
+
   var workDate = parts[0].trim();
-  var hasLiffFields = parts.length === 7;
-  var base = hasLiffFields ? parts[1].trim() : "";
-  var place = hasLiffFields ? parts[2].trim() : parts[1].trim();
-  var detailPlace = hasLiffFields ? parts[3].trim() : parts[2].trim();
-  var plant = hasLiffFields ? parts[4].trim() : parts[3].trim();
-  var task = hasLiffFields ? parts[5].trim() : parts[4].trim();
-  var memo = hasLiffFields ? parts[6].trim() : "";
+  var base = hasBase ? parts[1].trim() : "自宅";
+  var place = hasBase ? parts[2].trim() : parts[1].trim();
+  var detailPlace = hasBase ? parts[3].trim() : parts[2].trim();
+  var plant = hasBase ? parts[4].trim() : parts[3].trim();
+  var task = hasBase ? parts[5].trim() : parts[4].trim();
+  var memo = hasMemo ? (hasBase ? parts[6].trim() : parts[5].trim()) : "";
 
   if (!workDate || !place || !plant || !task) {
     return {

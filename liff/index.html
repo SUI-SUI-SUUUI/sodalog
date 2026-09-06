@@ -272,13 +272,6 @@
               <input id="workDate" type="date" required>
             </div>
             <div class="field">
-              <label for="base">育成拠点</label>
-              <select id="base" required>
-                <option value="">選択してください</option>
-                <option value="自宅">自宅</option>
-              </select>
-            </div>
-            <div class="field">
               <label for="place">場所</label>
               <select id="place" required>
                 <option value="">選択してください</option>
@@ -383,7 +376,6 @@
         const selectedTask = document.querySelector('input[name="task"]:checked');
         return {
           workDate: document.getElementById("workDate").value,
-          base: document.getElementById("base").value,
           place: document.getElementById("place").value,
           detailPlace: document.getElementById("detailPlace").value,
           plant: document.getElementById("plant").value.trim(),
@@ -402,7 +394,6 @@
       function showConfirmation(data) {
         const entries = [
           ["作業日", formatDate(data.workDate)],
-          ["育成拠点", data.base],
           ["場所", data.place],
           ["詳細場所", data.detailPlace || "省略"],
           ["植物名", data.plant],
@@ -431,7 +422,6 @@
       function buildMessage(data) {
         const values = [
           data.workDate.replace(/-/g, "/"),
-          data.base,
           data.place,
           data.detailPlace,
           data.plant,

@@ -273,11 +273,13 @@ function handleTextMessage(event) {
 }
 
 /**
- * LIFFから送られる7項目形式の記録か確認する。
+ * LIFFから送られる6項目・7項目形式の記録か確認する。
+ * (7項目は育成拠点ありの旧LIFF形式。現行LIFFは6項目)
  *
  * 段階入力セッションが残っていても、LIFFで確定した記録は
  * セッション入力として扱わず直接保存する。
  */
 function isLiffGardenLogText(text) {
-  return String(text || "").trim().split("_").length === 7;
+  var count = String(text || "").trim().split("_").length;
+  return count === 6 || count === 7;
 }
