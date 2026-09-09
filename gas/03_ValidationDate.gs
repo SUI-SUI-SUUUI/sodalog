@@ -57,10 +57,14 @@ function validateAndParseText(text) {
   var place = hasBase ? parts[2].trim() : parts[1].trim();
   var detailPlace = hasBase ? parts[3].trim() : parts[2].trim();
   var plant = hasBase ? parts[4].trim() : parts[3].trim();
-  var task = hasBase ? parts[5].trim() : parts[4].trim();
+  var taskText = hasBase ? parts[5].trim() : parts[4].trim();
   var memo = hasMemo ? (hasBase ? parts[6].trim() : parts[5].trim()) : "";
 
-  if (!workDate || !place || !plant || !task) {
+  /*
+   * STEP 9で場所以外を任意項目にしたため、必須なのは作業日と場所だけ。
+   * 植物名・作業内容・メモが全部空の記録(写真だけ残す、など)も許可する。
+   */
+  if (!workDate || !place) {
     return {
       isValid: false,
       errorCode: "EMPTY_ITEM",
@@ -82,11 +86,41 @@ function validateAndParseText(text) {
       place: place,
       detailPlace: detailPlace,
       plant: plant,
-      task: task,
+      task: parseTaskField(taskText),
       memo: memo,
       base: base,
     },
   };
+}
+
+/**
+ * 作業内容の文字列をタグ配列にする
+ *
+ * 現行LIFFはJSON配列("["水やり","草取り"]")で送ってくるが、
+ * 手入力のテキストコマンドや旧LIFF形式は単一の文字列("剪定")のまま
+ * 送られてくるため、どちらも配列として扱えるようにする。
+ *
+ * @param {string} taskText 作業内容の生テキスト
+ * @return {Array<string>} 作業内容のタグ配列
+ */
+function parseTaskField(taskText) {
+  if (!taskText) {
+    return [];
+  }
+
+  try {
+    var parsed = JSON.parse(taskText);
+
+    if (Array.isArray(parsed)) {
+      return parsed.map(String).filter(function (value) {
+        return value;
+      });
+    }
+  } catch (error) {
+    // JSON配列でなければ、単一の作業内容の文字列として扱う
+  }
+
+  return [String(taskText)];
 }
 
 /**

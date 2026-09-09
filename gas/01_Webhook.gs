@@ -210,6 +210,13 @@ function handleTextMessage(event) {
     deleteUserSession(userId);
   }
 
+  /*
+   * garden_logの「作業内容」列にはJSON配列("["水やり","草取り"]")で保存する。
+   * セッション・画像ファイル名など、単一の文字列が必要な箇所では、
+   * 「・」区切りで結合した表示用の文字列(taskDisplay)を別途使う。
+   */
+  var taskDisplay = parsed.task.join("・");
+
   var sheet = getSheet();
 
   sheet.appendRow(
@@ -219,7 +226,7 @@ function handleTextMessage(event) {
       parsed.place,
       parsed.detailPlace,
       parsed.plant,
-      parsed.task,
+      JSON.stringify(parsed.task),
       parsed.memo,
       "",
       "",
@@ -237,7 +244,7 @@ function handleTextMessage(event) {
     place: parsed.place,
     detailPlace: parsed.detailPlace,
     plantName: parsed.plant,
-    workType: parsed.task,
+    workType: taskDisplay,
     memo: parsed.memo,
     savedRow: savedRow,
   });
@@ -247,29 +254,28 @@ function handleTextMessage(event) {
       ", 画像追加待ちセッションを保存しました",
   );
 
-  replyMessage(
-    replyToken,
-    "記録しました:\n" +
-      "作業日: " +
-      parsed.workDate +
-      "\n" +
-      "場所: " +
-      parsed.place +
-      "\n" +
-      "詳細場所: " +
-      parsed.detailPlace +
-      "\n" +
-      "植物名: " +
-      parsed.plant +
-      "\n" +
-      "作業内容: " +
-      parsed.task +
-      (parsed.base ? "\n育成拠点: " + parsed.base : "") +
-      (parsed.memo ? "\nメモ: " + parsed.memo : "") +
-      "\n\n" +
-      "続けて画像を送ると、この記録に追加されます。",
-    buildPhotoChoiceQuickReplyActions(),
-  );
+  var replyLines = ["記録しました:", "作業日: " + parsed.workDate, "場所: " + parsed.place];
+
+  if (parsed.detailPlace) {
+    replyLines.push("詳細場所: " + parsed.detailPlace);
+  }
+  if (parsed.plant) {
+    replyLines.push("植物名: " + parsed.plant);
+  }
+  if (parsed.task.length > 0) {
+    replyLines.push("作業内容: " + taskDisplay);
+  }
+  if (parsed.base) {
+    replyLines.push("育成拠点: " + parsed.base);
+  }
+  if (parsed.memo) {
+    replyLines.push("メモ: " + parsed.memo);
+  }
+
+  replyLines.push("");
+  replyLines.push("続けて画像を送ると、この記録に追加されます。");
+
+  replyMessage(replyToken, replyLines.join("\n"), buildPhotoChoiceQuickReplyActions());
 }
 
 /**

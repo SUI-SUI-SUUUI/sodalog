@@ -397,20 +397,20 @@
               </div>
             </div>
             <div class="field">
-              <label for="plant">植物名</label>
-              <input id="plant" type="text" placeholder="例：アジサイ" required>
+              <label for="plant">植物名(任意)</label>
+              <input id="plant" type="text" placeholder="例：アジサイ">
             </div>
             <div class="field">
-              <span class="field-title">作業内容</span>
+              <span class="field-title">作業内容(任意・複数選択可)</span>
               <div class="tasks">
-                <label class="task"><input type="radio" name="task" value="水やり" required><span>水やり</span></label>
-                <label class="task"><input type="radio" name="task" value="肥料"><span>肥料</span></label>
-                <label class="task"><input type="radio" name="task" value="収穫"><span>収穫</span></label>
-                <label class="task"><input type="radio" name="task" value="剪定"><span>剪定</span></label>
-                <label class="task"><input type="radio" name="task" value="草取り"><span>草取り</span></label>
-                <label class="task"><input type="radio" name="task" value="植え付け"><span>植え付け</span></label>
-                <label class="task"><input type="radio" name="task" value="成長記録"><span>成長記録</span></label>
-                <label class="task"><input type="radio" name="task" value="その他"><span>その他</span></label>
+                <label class="task"><input type="checkbox" name="task" value="水やり"><span>水やり</span></label>
+                <label class="task"><input type="checkbox" name="task" value="肥料"><span>肥料</span></label>
+                <label class="task"><input type="checkbox" name="task" value="収穫"><span>収穫</span></label>
+                <label class="task"><input type="checkbox" name="task" value="剪定"><span>剪定</span></label>
+                <label class="task"><input type="checkbox" name="task" value="草取り"><span>草取り</span></label>
+                <label class="task"><input type="checkbox" name="task" value="植え付け"><span>植え付け</span></label>
+                <label class="task"><input type="checkbox" name="task" value="成長記録"><span>成長記録</span></label>
+                <label class="task"><input type="checkbox" name="task" value="その他"><span>その他</span></label>
               </div>
             </div>
             <div class="field">
@@ -478,15 +478,23 @@
       }
 
       function getData() {
-        const selectedTask = document.querySelector('input[name="task"]:checked');
+        const selectedTasks = Array.from(
+          document.querySelectorAll('input[name="task"]:checked'),
+        ).map(function (input) {
+          return input.value;
+        });
         return {
           workDate: document.getElementById("workDate").value,
           place: document.getElementById("place").value,
           detailPlace: document.getElementById("detailPlace").value,
           plant: document.getElementById("plant").value.trim(),
-          task: selectedTask ? selectedTask.value : "",
+          task: selectedTasks,
           memo: document.getElementById("memo").value.trim(),
         };
+      }
+
+      function isEmptyRecord(data) {
+        return data.task.length === 0 && !data.plant && !data.memo;
       }
 
       function formatDate(value) {
@@ -501,8 +509,8 @@
           ["作業日", formatDate(data.workDate)],
           ["場所", data.place],
           ["詳細場所", data.detailPlace || "省略"],
-          ["植物名", data.plant],
-          ["作業内容", data.task],
+          ["植物名", data.plant || "なし"],
+          ["作業内容", data.task.length > 0 ? data.task.join("、") : "なし"],
           ["メモ", data.memo || "なし"],
         ];
         const list = document.getElementById("confirmation");
@@ -530,7 +538,7 @@
           data.place,
           data.detailPlace,
           data.plant,
-          data.task,
+          JSON.stringify(data.task),
           data.memo,
         ];
         if (values.some(function (value) { return value.includes("_"); })) {
@@ -557,9 +565,20 @@
 
       form.addEventListener("submit", function (event) {
         event.preventDefault();
-        if (form.reportValidity()) {
-          showConfirmation(getData());
+        if (!form.reportValidity()) {
+          return;
         }
+        const data = getData();
+        if (
+          isEmptyRecord(data) &&
+          !window.confirm(
+            "作業内容・植物名・メモがすべて空です。このまま記録しますか？\n" +
+              "(あとで写真を送って記録に追加することもできます)",
+          )
+        ) {
+          return;
+        }
+        showConfirmation(data);
       });
 
       document.getElementById("backButton").addEventListener("click", function () {
@@ -628,7 +647,10 @@
 
           const task = document.createElement("p");
           task.className = "album-task";
-          task.textContent = taskIcon(record.task) + " " + (record.task || "記録");
+          task.textContent =
+            record.task && record.task.length > 0
+              ? record.task.map(taskIcon).join("") + " " + record.task.join("、")
+              : "🔖 記録";
 
           item.append(date, task);
 

@@ -82,7 +82,7 @@ function getAlbumRecordsForUser(userId, limit) {
       place: String(row[2] || ""),
       detailPlace: String(row[3] || ""),
       plant: String(row[4] || ""),
-      task: String(row[5] || ""),
+      task: parseTaskField(String(row[5] || "")),
       memo: String(row[6] || ""),
       hasImage: Boolean(imageUrl),
       imageFileId: extractDriveFileId(imageUrl),

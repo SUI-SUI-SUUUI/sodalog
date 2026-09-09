@@ -158,9 +158,15 @@ function getPendingImageRecord(userId, savedRow) {
   var place = sheet.getRange(targetRow, 3).getDisplayValue();
   var detailPlace = sheet.getRange(targetRow, 4).getDisplayValue();
   var plant = sheet.getRange(targetRow, 5).getDisplayValue();
-  var task = sheet.getRange(targetRow, 6).getDisplayValue();
+  /*
+   * 作業内容の列はJSON配列("["水やり","草取り"]")または
+   * 旧形式の単一文字列で保存されているため、parseTaskFieldで配列に揃えてから
+   * ファイル名用に「・」区切りの文字列へ戻す。植物名・作業内容は
+   * STEP 9でどちらも任意項目になったため、空でも記録として扱う。
+   */
+  var task = parseTaskField(sheet.getRange(targetRow, 6).getDisplayValue()).join("・");
 
-  if (!workDate || !plant || !task) {
+  if (!workDate) {
     return null;
   }
 
