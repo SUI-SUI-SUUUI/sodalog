@@ -66,6 +66,52 @@
 
       .status.error { color: #8b1f1f; background: #fff0f0; }
 
+      .selected-location {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin: 0 0 20px;
+        padding: 10px;
+        border-radius: 12px;
+        background: #eef6ee;
+      }
+
+      .selected-location-thumb,
+      .selected-location-thumb-placeholder {
+        width: 48px;
+        height: 48px;
+        border-radius: 10px;
+        flex-shrink: 0;
+        object-fit: cover;
+        background: #fff;
+      }
+
+      .selected-location-thumb-placeholder {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 20px;
+      }
+
+      .selected-location-text { flex: 1; }
+
+      .selected-location-label { margin: 0; font-size: 12px; color: #687368; }
+
+      .selected-location-name { margin: 0; font-weight: 700; }
+
+      .selected-location-change {
+        width: auto;
+        padding: 6px 12px;
+        border: 1px solid #4f7956;
+        border-radius: 10px;
+        background: #fff;
+        color: #3f6546;
+        font: inherit;
+        font-size: 13px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
       .hidden { display: none; }
 
       .confirmation { margin: 0 0 24px; padding: 0; list-style: none; }
@@ -314,30 +360,41 @@
           <p class="description">今日の作業内容を入力してください。</p>
           <p id="status" class="status">LINEとの接続を確認しています。</p>
 
+          <div id="selectedLocationCard" class="selected-location hidden">
+            <div id="selectedLocationThumb" class="selected-location-thumb-placeholder">🌱</div>
+            <div class="selected-location-text">
+              <p class="selected-location-label">記録する場所</p>
+              <p id="selectedLocationName" class="selected-location-name"></p>
+            </div>
+            <button id="changeLocationButton" class="selected-location-change" type="button">変更する</button>
+          </div>
+
           <form id="gardenLogForm">
             <div class="field">
               <label for="workDate">作業日</label>
               <input id="workDate" type="date" required>
             </div>
-            <div class="field">
-              <label for="place">場所</label>
-              <select id="place" required>
-                <option value="">選択してください</option>
-                <option value="庭">庭</option>
-                <option value="室内">室内</option>
-                <option value="その他">その他</option>
-              </select>
-            </div>
-            <div class="field">
-              <label for="detailPlace">詳細場所</label>
-              <select id="detailPlace">
-                <option value="">省略する</option>
-                <option value="北側">北側</option>
-                <option value="南側">南側</option>
-                <option value="中央">中央</option>
-                <option value="東側">東側</option>
-                <option value="西側">西側</option>
-              </select>
+            <div id="manualLocationFields">
+              <div class="field">
+                <label for="place">場所</label>
+                <select id="place" required>
+                  <option value="">選択してください</option>
+                  <option value="庭">庭</option>
+                  <option value="室内">室内</option>
+                  <option value="その他">その他</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="detailPlace">詳細場所</label>
+                <select id="detailPlace">
+                  <option value="">省略する</option>
+                  <option value="北側">北側</option>
+                  <option value="南側">南側</option>
+                  <option value="中央">中央</option>
+                  <option value="東側">東側</option>
+                  <option value="西側">西側</option>
+                </select>
+              </div>
             </div>
             <div class="field">
               <label for="plant">植物名</label>
@@ -1025,8 +1082,7 @@
         }
 
         renderLocationPicker(locations, function (location) {
-          document.getElementById("place").value = location.place;
-          document.getElementById("detailPlace").value = location.detailPlace;
+          applySelectedLocation(location);
           selectLocationScreen();
         });
 
@@ -1041,7 +1097,47 @@
         window.scrollTo({ top: 0, behavior: "smooth" });
       }
 
-      document.getElementById("showFormButton").addEventListener("click", selectLocationScreen);
+      /*
+       * サムネイル表示済みの場合、次に別の場所を選んだ時のために
+       * プレースホルダーを毎回作り直してから読み込む(loadGroupThumbnailは
+       * 要素をimgへ置き換えてしまうため、idを持つ要素を使い回せない)。
+       */
+      function resetSelectedLocationThumb() {
+        const existing = document.getElementById("selectedLocationThumb");
+        const fresh = document.createElement("div");
+        fresh.id = "selectedLocationThumb";
+        fresh.className = "selected-location-thumb-placeholder";
+        fresh.textContent = "🌱";
+        existing.replaceWith(fresh);
+        return fresh;
+      }
+
+      function applySelectedLocation(location) {
+        document.getElementById("place").value = location.place;
+        document.getElementById("detailPlace").value = location.detailPlace;
+
+        document.getElementById("manualLocationFields").classList.add("hidden");
+        document.getElementById("selectedLocationName").textContent = location.locationName;
+
+        const thumbSlot = resetSelectedLocationThumb();
+        if (location.representativeImage) {
+          loadGroupThumbnail(location.representativeImage, thumbSlot);
+        }
+
+        document.getElementById("selectedLocationCard").classList.remove("hidden");
+      }
+
+      document.getElementById("showFormButton").addEventListener("click", function () {
+        document.getElementById("selectedLocationCard").classList.add("hidden");
+        document.getElementById("manualLocationFields").classList.remove("hidden");
+        selectLocationScreen();
+      });
+
+      document.getElementById("changeLocationButton").addEventListener("click", function () {
+        document.getElementById("locationPickerScreen").classList.remove("hidden");
+        formScreen.classList.add("hidden");
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      });
 
       const tabPanels = {
         record: document.getElementById("recordTab"),
