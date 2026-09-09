@@ -302,6 +302,13 @@
       </div>
 
       <div id="recordTab" class="tab-panel">
+        <section id="locationPickerScreen" class="card hidden">
+          <h1>どこを記録しますか？</h1>
+          <p class="description">最近使った場所を選ぶと、すぐに記録画面に進めます。</p>
+          <ul id="locationPickerList" class="album-list album-grid"></ul>
+          <button id="showFormButton" class="secondary" type="button">この場所以外に記録する</button>
+        </section>
+
         <section id="formScreen" class="card">
           <h1>園芸記録を追加</h1>
           <p class="description">今日の作業内容を入力してください。</p>
@@ -484,6 +491,7 @@
             return;
           }
           setStatus("入力内容をLINEに送信して記録します。");
+          loadLocationPicker();
         } catch (error) {
           console.error("LIFF初期化エラー", error);
           setStatus("LINEとの接続に失敗しました。LINEアプリから開き直してください。", true);
@@ -870,35 +878,27 @@
         }
       }
 
-      let albumLoading = false;
       let albumRecords = [];
 
-      async function loadAlbum(forceRefresh) {
-        if (albumLoading) {
-          return;
-        }
-
-        /*
-         * タブを行き来するたびに毎回スプレッドシート全件を読み直すと
-         * 遅いため、既に読み込み済みならキャッシュを使い回す。
-         * 記録を追加した直後などは「更新」ボタンで明示的に取り直す。
-         */
+      /*
+       * 記録一覧の取得だけを行い、画面への反映は呼び出し側に任せる。
+       * アルバム画面・記録画面の「最近使った場所」の両方から共有して使う。
+       * タブを行き来するたびに毎回スプレッドシート全件を読み直すと遅いため、
+       * 既に読み込み済みならキャッシュ(albumRecords)を使い回す。
+       */
+      async function fetchGardenRecords(forceRefresh) {
         if (!forceRefresh && albumRecords.length > 0) {
-          return;
+          return { success: true, records: albumRecords, fromCache: true };
         }
 
-        albumLoading = true;
-
-        const albumStatus = document.getElementById("albumStatus");
-        albumStatus.classList.remove("error");
-        albumStatus.textContent = "読み込み中です。";
-        document.getElementById("albumList").replaceChildren();
+        if (!liff.isLoggedIn()) {
+          return {
+            success: false,
+            message: "LINEにログインしていません。LINEアプリから開き直してください。",
+          };
+        }
 
         try {
-          if (!liff.isLoggedIn()) {
-            throw new Error("LINEにログインしていません。LINEアプリから開き直してください。");
-          }
-
           const idToken = liff.getIDToken();
           const response = await fetch(
             WEBAPP_URL + "?action=list&idToken=" + encodeURIComponent(idToken),
@@ -906,26 +906,142 @@
           const data = await response.json();
 
           if (!data.success) {
-            throw new Error(data.message || "記録を取得できませんでした。");
+            return { success: false, message: data.message || "記録を取得できませんでした。" };
           }
 
-          if (data.records.length === 0) {
-            albumStatus.textContent = "まだ記録がありません。";
-            return;
-          }
-
-          albumStatus.textContent = "";
           albumRecords = data.records;
-          renderAlbumZones();
+          return { success: true, records: albumRecords, fromCache: false };
         } catch (error) {
-          console.error("アルバム取得エラー", error);
-          albumStatus.classList.add("error");
-          albumStatus.textContent =
-            error.message || "記録を取得できませんでした。時間をおいて開き直してください。";
-        } finally {
-          albumLoading = false;
+          console.error("記録取得エラー", error);
+          return {
+            success: false,
+            message: "記録を取得できませんでした。時間をおいて開き直してください。",
+          };
         }
       }
+
+      let albumLoading = false;
+
+      async function loadAlbum(forceRefresh) {
+        if (albumLoading) {
+          return;
+        }
+
+        albumLoading = true;
+
+        const result = await fetchGardenRecords(forceRefresh);
+
+        /*
+         * キャッシュを使い回した場合は、場所→植物の絞り込み中の画面を
+         * 壊さないよう、あえて再描画しない(タブを行き来しても続きから見られる)。
+         */
+        if (result.success && result.fromCache) {
+          albumLoading = false;
+          return;
+        }
+
+        const albumStatus = document.getElementById("albumStatus");
+        albumStatus.classList.remove("error");
+        document.getElementById("albumList").replaceChildren();
+
+        if (!result.success) {
+          albumStatus.classList.add("error");
+          albumStatus.textContent = result.message;
+        } else if (result.records.length === 0) {
+          albumStatus.textContent = "まだ記録がありません。";
+        } else {
+          albumStatus.textContent = "";
+          renderAlbumZones();
+        }
+
+        albumLoading = false;
+      }
+
+      /*
+       * 「場所」を、実績データ(place/detailPlace)から抽出した
+       * locationId/locationName/representativeImage を持つオブジェクトとして扱う。
+       * 将来、場所をユーザー登録制にする際は、このデータ取得部分だけを
+       * 差し替えれば、下のUI(renderLocationPicker)はそのまま使える想定。
+       */
+      function buildLocationSummaries(records, limit) {
+        const map = new Map();
+
+        records.forEach(function (record) {
+          const place = placeLabel(record.place);
+          const detailPlace = record.detailPlace || "";
+          const locationId = place + "__" + detailPlace;
+
+          if (!map.has(locationId)) {
+            map.set(locationId, {
+              locationId: locationId,
+              locationName: zoneDisplayLabel(place, detailPlace),
+              place: place,
+              detailPlace: detailPlace,
+              representativeImage:
+                record.hasImage && record.imageFileId ? record.imageFileId : "",
+              lastUsedAt: record.workDate,
+            });
+          }
+        });
+
+        // records は新しい順に並んでいるため、Mapへの登録順がそのまま「最近使った順」になる
+        return Array.from(map.values()).slice(0, limit);
+      }
+
+      function renderLocationPicker(locations, onSelect) {
+        const list = document.getElementById("locationPickerList");
+        list.replaceChildren();
+
+        locations.forEach(function (location) {
+          const item = buildGroupItem(
+            location.locationName,
+            "前回 " + formatSlashDate(location.lastUsedAt),
+            location.representativeImage,
+          );
+          item.addEventListener("click", function () {
+            onSelect(location);
+          });
+          list.append(item);
+        });
+      }
+
+      let locationPickerDecided = false;
+
+      async function loadLocationPicker() {
+        if (locationPickerDecided) {
+          return;
+        }
+
+        const result = await fetchGardenRecords(false);
+
+        if (!result.success || result.records.length === 0) {
+          return;
+        }
+
+        const locations = buildLocationSummaries(result.records, 5);
+
+        if (locations.length === 0) {
+          return;
+        }
+
+        renderLocationPicker(locations, function (location) {
+          document.getElementById("place").value = location.place;
+          document.getElementById("detailPlace").value = location.detailPlace;
+          selectLocationScreen();
+        });
+
+        document.getElementById("locationPickerScreen").classList.remove("hidden");
+        formScreen.classList.add("hidden");
+      }
+
+      function selectLocationScreen() {
+        locationPickerDecided = true;
+        document.getElementById("locationPickerScreen").classList.add("hidden");
+        formScreen.classList.remove("hidden");
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+
+      document.getElementById("showFormButton").addEventListener("click", selectLocationScreen);
 
       const tabPanels = {
         record: document.getElementById("recordTab"),
@@ -948,6 +1064,10 @@
 
         if (tabKey === "album") {
           loadAlbum();
+        }
+
+        if (tabKey === "record") {
+          loadLocationPicker();
         }
       }
 
