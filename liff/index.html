@@ -556,7 +556,18 @@
             return;
           }
           setStatus("入力内容をLINEに送信して記録します。");
-          loadLocationPicker();
+
+          /*
+           * liff.init()が終わる前にタブ切り替え・場所ピッカーの読み込みを
+           * 走らせると、liff.isLoggedIn()/liff.getIDToken()がまだ使えず
+           * 失敗する。そのため、初期タブの反映はここ(init完了後)でだけ行う。
+           */
+          const initialTab = new URLSearchParams(window.location.search).get("tab");
+          if (initialTab) {
+            activateTab(initialTab);
+          } else {
+            loadLocationPicker();
+          }
         } catch (error) {
           console.error("LIFF初期化エラー", error);
           setStatus("LINEとの接続に失敗しました。LINEアプリから開き直してください。", true);
@@ -1196,10 +1207,6 @@
         });
       });
 
-      const initialTab = new URLSearchParams(window.location.search).get("tab");
-      if (initialTab) {
-        activateTab(initialTab);
-      }
     </script>
   </body>
 </html>
