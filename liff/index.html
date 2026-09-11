@@ -337,6 +337,19 @@
         line-height: 1;
         cursor: pointer;
       }
+
+      .confirm-dialog {
+        max-width: 360px;
+        padding: 20px;
+        border-radius: 16px;
+        background: #fff;
+      }
+
+      .confirm-dialog-text { margin: 0 0 20px; line-height: 1.6; }
+
+      .confirm-dialog-actions { display: flex; gap: 12px; }
+
+      .confirm-dialog-actions button { flex: 1; width: auto; margin: 0; }
     </style>
   </head>
   <body>
@@ -453,6 +466,19 @@
       <div id="photoModal" class="modal-overlay hidden">
         <button id="photoModalClose" class="modal-close" type="button" aria-label="閉じる">×</button>
         <img id="photoModalImage" class="modal-image" alt="">
+      </div>
+
+      <div id="emptyRecordModal" class="modal-overlay hidden">
+        <div class="confirm-dialog">
+          <p class="confirm-dialog-text">
+            作業内容・植物名・メモがすべて空です。このまま記録しますか？<br>
+            (あとで写真を送って記録に追加することもできます)
+          </p>
+          <div class="confirm-dialog-actions">
+            <button id="emptyRecordCancel" class="secondary" type="button">キャンセル</button>
+            <button id="emptyRecordOk" class="primary" type="button">記録する</button>
+          </div>
+        </div>
       </div>
     </main>
 
@@ -574,19 +600,41 @@
         }
       }
 
-      form.addEventListener("submit", function (event) {
+      const emptyRecordModal = document.getElementById("emptyRecordModal");
+
+      function confirmEmptyRecord() {
+        return new Promise(function (resolve) {
+          const okButton = document.getElementById("emptyRecordOk");
+          const cancelButton = document.getElementById("emptyRecordCancel");
+
+          function cleanup(result) {
+            emptyRecordModal.classList.add("hidden");
+            okButton.removeEventListener("click", onOk);
+            cancelButton.removeEventListener("click", onCancel);
+            resolve(result);
+          }
+
+          function onOk() {
+            cleanup(true);
+          }
+
+          function onCancel() {
+            cleanup(false);
+          }
+
+          okButton.addEventListener("click", onOk);
+          cancelButton.addEventListener("click", onCancel);
+          emptyRecordModal.classList.remove("hidden");
+        });
+      }
+
+      form.addEventListener("submit", async function (event) {
         event.preventDefault();
         if (!form.reportValidity()) {
           return;
         }
         const data = getData();
-        if (
-          isEmptyRecord(data) &&
-          !window.confirm(
-            "作業内容・植物名・メモがすべて空です。このまま記録しますか？\n" +
-              "(あとで写真を送って記録に追加することもできます)",
-          )
-        ) {
+        if (isEmptyRecord(data) && !(await confirmEmptyRecord())) {
           return;
         }
         showConfirmation(data);
