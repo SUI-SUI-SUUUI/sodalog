@@ -402,7 +402,7 @@
             </div>
             <div class="field">
               <span class="field-title">作業内容(任意・複数選択可)</span>
-              <div class="tasks">
+              <div id="taskList" class="tasks">
                 <label class="task"><input type="checkbox" name="task" value="水やり"><span>水やり</span></label>
                 <label class="task"><input type="checkbox" name="task" value="肥料"><span>肥料</span></label>
                 <label class="task"><input type="checkbox" name="task" value="収穫"><span>収穫</span></label>
@@ -641,6 +641,61 @@
 
       function taskIcon(task) {
         return TASK_ICONS[task] || "🔖";
+      }
+
+      const DEFAULT_TASK_ORDER = Object.keys(TASK_ICONS).concat(["その他"]);
+
+      /*
+       * 指定した場所の過去の記録から、作業内容タグごとの使用回数を集計する。
+       * 1件の記録が複数タグを持つ場合は、それぞれのタグを1回として数える。
+       */
+      function computeTaskFrequency(records, place, detailPlace) {
+        const counts = {};
+
+        records.forEach(function (record) {
+          if (
+            placeLabel(record.place) !== place ||
+            (record.detailPlace || "") !== detailPlace
+          ) {
+            return;
+          }
+          (record.task || []).forEach(function (task) {
+            counts[task] = (counts[task] || 0) + 1;
+          });
+        });
+
+        return counts;
+      }
+
+      /*
+       * 作業内容チップを、その場所での使用頻度が高い順に並べ替える。
+       * 同じ頻度(未使用同士を含む)は、デフォルトの並び順を保つ。
+       */
+      function reorderTaskChips(place, detailPlace) {
+        if (!place) {
+          return;
+        }
+
+        const counts = computeTaskFrequency(albumRecords, place, detailPlace);
+        const taskList = document.getElementById("taskList");
+        const labels = Array.from(taskList.querySelectorAll(".task"));
+
+        labels.sort(function (a, b) {
+          const aValue = a.querySelector("input").value;
+          const bValue = b.querySelector("input").value;
+          const aCount = counts[aValue] || 0;
+          const bCount = counts[bValue] || 0;
+
+          if (aCount !== bCount) {
+            return bCount - aCount;
+          }
+
+          return DEFAULT_TASK_ORDER.indexOf(aValue) - DEFAULT_TASK_ORDER.indexOf(bValue);
+        });
+
+        labels.forEach(function (label) {
+          taskList.append(label);
+        });
       }
 
       function renderAlbumRecords(records) {
@@ -1158,7 +1213,21 @@
         }
 
         document.getElementById("selectedLocationCard").classList.remove("hidden");
+
+        reorderTaskChips(location.place, location.detailPlace);
       }
+
+      function handleManualLocationChange() {
+        reorderTaskChips(
+          document.getElementById("place").value,
+          document.getElementById("detailPlace").value,
+        );
+      }
+
+      document.getElementById("place").addEventListener("change", handleManualLocationChange);
+      document
+        .getElementById("detailPlace")
+        .addEventListener("change", handleManualLocationChange);
 
       document.getElementById("showFormButton").addEventListener("click", function () {
         document.getElementById("selectedLocationCard").classList.add("hidden");
