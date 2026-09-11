@@ -21,6 +21,7 @@ secrets.json
 my-garden-lab-2026/
 /docs/edd2026-ouboyoukou.pdf
 /docs/edd2026-sanka-kiyaku.pdf
+/docs/そだログ ProtoPedia・EDD2026 3分プレゼン共通版.md
 
 # --- OS / エディタ ---
 .DS_Store
@@ -30,6 +31,10 @@ desktop.ini
 .vscode/
 !.vscode/extensions.json
 .cursor/
+.claude/
+
+# --- 作業用の一時置き場 ---
+_trash/
 
 # --- ログ・一時ファイル ---
 *.log
