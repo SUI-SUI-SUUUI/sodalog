@@ -14,6 +14,7 @@
 var REQUIRED_SCRIPT_PROPERTIES = [
   "LINE_CHANNEL_ACCESS_TOKEN",
   "IMAGE_FOLDER_ID",
+  "GAS_SHARED_SECRET",
 ];
 
 /** リッチメニュー利用時のみ必要 */
@@ -32,6 +33,7 @@ var OPTIONAL_SCRIPT_PROPERTIES = [
  * |-----------------------------|-----------------------------------------------|
  * | LINE_CHANNEL_ACCESS_TOKEN   | LINE Developers のチャネルアクセストークン     |
  * | IMAGE_FOLDER_ID             | 画像保存用 Google Drive 親フォルダの ID        |
+ * | GAS_SHARED_SECRET           | Cloud Runとの共有シークレット(Secret Managerの値と同じ文字列) |
  * | RICH_MENU_IMAGE_FILE_ID     | リッチメニュー画像の Drive ファイル ID（任意） |
  * | RICH_MENU_ID                | setupRichMenu 実行後に自動保存（任意）         |
  *

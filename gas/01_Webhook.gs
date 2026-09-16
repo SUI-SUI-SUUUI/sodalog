@@ -14,6 +14,13 @@ function doPost(e) {
 
     var body = JSON.parse(e.postData.contents);
 
+    if (!isValidGasSharedSecret(body.sharedSecret)) {
+      debugLog("共有シークレットが不正なリクエストを拒否しました");
+      return createJsonResponse({
+        status: "ok",
+      });
+    }
+
     var events = body.events || [];
 
     debugLog("events数: " + events.length);
@@ -73,6 +80,25 @@ function doPost(e) {
   return createJsonResponse({
     status: "ok",
   });
+}
+
+/**
+ * Cloud Runからの転送リクエストかを共有シークレットで確認する
+ *
+ * スクリプトプロパティ：
+ * GAS_SHARED_SECRET
+ */
+function isValidGasSharedSecret(secret) {
+  var expected = PropertiesService.getScriptProperties().getProperty(
+    "GAS_SHARED_SECRET",
+  );
+
+  if (!expected) {
+    debugLog("エラー: GAS_SHARED_SECRET が未設定です");
+    return false;
+  }
+
+  return typeof secret === "string" && secret === expected;
 }
 
 /**

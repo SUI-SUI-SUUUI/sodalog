@@ -12,6 +12,8 @@ service-account*.json
 *.key
 *.p12
 secrets.json
+OAuth クライアント.txt
+OAuth*.txt
 
 # Google Apps Script（clasp 利用時）
 .clasp.json
@@ -44,6 +46,7 @@ _trash/
 
 # --- 依存関係（将来追加時） ---
 node_modules/
+server/dist/
 ChatGPT�J���t���[.txt
 /ChatGPT*.txt
 assets/LIFF/0727_protpedia.png
