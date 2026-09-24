@@ -1,0 +1,23 @@
+# Cloud Run source deploy (gcloud run deploy --source server) で
+# アップロードしないファイル。.gitignoreはserver/直下に無く効かないため別途必要。
+
+# 機密情報
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+credentials.json
+service-account*.json
+secrets.json
+
+# ビルド成果物・依存関係(Cloud Build側で npm install / gcp-build が走る)
+node_modules/
+dist/
+
+# Git・ローカル
+.git
+.gitignore
+.gcloudignore
+*.log
