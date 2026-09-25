@@ -151,6 +151,38 @@ export async function connectWithStoredToken(config: GoogleConfig): Promise<Goog
   }
 }
 
+const API_CLIENT_CACHE_MS = 10 * 60 * 1000;
+let cachedApiClient: { client: OAuth2Client; loadedAt: number } | null = null;
+
+/**
+ * API用のGoogleクライアントを返す。refresh tokenが未連携ならnull。
+ *
+ * 毎リクエストでSecret Managerを読まないよう、インスタンス内で一定時間使い回す
+ * (アクセストークンの更新はOAuth2Clientが自動で行う)。
+ * 再連携でrefresh tokenが新しくなっても、最長この時間で読み直される。
+ */
+export async function getApiClient(config: GoogleConfig): Promise<OAuth2Client | null> {
+  if (cachedApiClient && Date.now() - cachedApiClient.loadedAt < API_CLIENT_CACHE_MS) {
+    return cachedApiClient.client;
+  }
+  const raw = await readLatestSecret(config.projectId, config.refreshTokenSecret);
+  if (!raw) {
+    cachedApiClient = null;
+    return null;
+  }
+  const stored = JSON.parse(raw) as StoredRefreshToken;
+  const client = createOAuthClient(config);
+  client.setCredentials({ refresh_token: stored.refresh_token });
+  cachedApiClient = { client, loadedAt: Date.now() };
+  return client;
+}
+
+// refresh tokenの失効・取り消し(invalid_grant)かどうか
+export function isGoogleAuthError(err: unknown): boolean {
+  const summary = describeGoogleError(err);
+  return summary.reason === "invalid_grant" || summary.message.includes("invalid_grant");
+}
+
 export async function runCheck<T>(
   fn: () => Promise<T>
 ): Promise<{ ok: true; result: T } | { ok: false; error: GoogleErrorSummary }> {

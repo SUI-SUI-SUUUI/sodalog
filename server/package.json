@@ -9,7 +9,8 @@
     "dev": "tsx watch src/index.ts",
     "gcp-build": "tsc",
     "build": "tsc",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "test": "tsx --test \"src/**/*.test.ts\""
   },
   "dependencies": {
     "@google-cloud/secret-manager": "^7.1.0",

@@ -1,6 +1,7 @@
 import "dotenv/config";
 import express, { type ErrorRequestHandler } from "express";
 import { middleware as lineMiddleware, SignatureValidationFailed } from "@line/bot-sdk";
+import { createApiRouter } from "./api";
 import { loadGoogleConfig } from "./google";
 import { createOAuthRouter } from "./oauth";
 import { createStorageRouter } from "./storage";
@@ -52,11 +53,12 @@ async function forwardEventsToGas(events: unknown): Promise<void> {
   console.log("GAS forward status:", response.status);
 }
 
-// Google連携(STEP3 OAuth検証・STEP4 保存先セットアップ)。
+// Google連携(STEP3 OAuth検証・STEP4 保存先セットアップ・LIFF向けAPI)。
 // 設定が無くても各ルートが503を返すだけで、Webhookには影響しない
 const googleConfig = loadGoogleConfig();
 app.use("/oauth", createOAuthRouter(googleConfig));
 app.use("/admin/storage", createStorageRouter(googleConfig));
+app.use("/api", createApiRouter(googleConfig));
 
 const lineErrorHandler: ErrorRequestHandler = (err, _req, res, next) => {
   if (err instanceof SignatureValidationFailed) {
