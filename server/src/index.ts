@@ -1,6 +1,7 @@
 import "dotenv/config";
 import express, { type ErrorRequestHandler } from "express";
 import { middleware as lineMiddleware, SignatureValidationFailed } from "@line/bot-sdk";
+import { createOAuthRouter } from "./oauth";
 
 const app = express();
 const port = process.env.PORT ? Number(process.env.PORT) : 8080;
@@ -48,6 +49,9 @@ async function forwardEventsToGas(events: unknown): Promise<void> {
 
   console.log("GAS forward status:", response.status);
 }
+
+// STEP3 OAuth検証用。設定が無くても/oauth/*が503を返すだけで、Webhookには影響しない
+app.use("/oauth", createOAuthRouter());
 
 const lineErrorHandler: ErrorRequestHandler = (err, _req, res, next) => {
   if (err instanceof SignatureValidationFailed) {
