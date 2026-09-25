@@ -6,18 +6,22 @@
  * 新規作成したファイルへ書き込めるか、refresh tokenが何日で失効するかを確かめる。
  * 記録保存APIではないため、既存データへの書き込みは一切行わない。
  */
-import { randomBytes, timingSafeEqual } from "node:crypto";
-import {
-  Router,
-  type NextFunction,
-  type Request,
-  type RequestHandler,
-  type Response,
-} from "express";
-import { CodeChallengeMethod, OAuth2Client } from "google-auth-library";
+import { randomBytes } from "node:crypto";
+import { Router, type NextFunction, type Request, type Response } from "express";
+import { CodeChallengeMethod } from "google-auth-library";
 import { drive } from "@googleapis/drive";
 import { sheets } from "@googleapis/sheets";
-import { addSecretVersion, readLatestSecret } from "./secrets";
+import { addSecretVersion } from "./secrets";
+import {
+  connectWithStoredToken,
+  createOAuthClient,
+  describeGoogleError,
+  runCheck,
+  tokenAgeDays,
+  type GoogleConfig,
+  type StoredRefreshToken,
+} from "./google";
+import { asyncHandler, requireAdmin, requireGoogleConfig, safeEqual } from "./http";
 
 const DRIVE_FILE_SCOPE = "https://www.googleapis.com/auth/drive.file";
 const SCOPES = ["openid", "https://www.googleapis.com/auth/userinfo.email", DRIVE_FILE_SCOPE];
@@ -28,77 +32,6 @@ const STATE_COOKIE_MAX_AGE_MS = 10 * 60 * 1000;
 const TEST_FOLDER_NAME = "sodalog-oauth-test";
 const TEST_SHEET_NAME = "sodalog-oauth-test-sheet";
 const TEST_APP_PROPERTY = "sodalogOauthTest";
-
-type OAuthConfig = {
-  clientId: string;
-  clientSecret: string;
-  redirectUri: string;
-  allowedEmail: string;
-  adminToken: string;
-  projectId: string;
-  refreshTokenSecret: string;
-  imageFolderId: string;
-  gardenLogSpreadsheetId: string;
-};
-
-type StoredRefreshToken = {
-  refresh_token: string;
-  scope: string;
-  obtained_at: string;
-};
-
-/**
- * OAuth検証に必要な環境変数を読む。足りない場合はnullを返し、
- * サーバー全体(LINE Webhook)の起動は止めない。
- */
-function loadConfig(): OAuthConfig | null {
-  const config = {
-    clientId: process.env.GOOGLE_OAUTH_CLIENT_ID ?? "",
-    clientSecret: process.env.GOOGLE_OAUTH_CLIENT_SECRET ?? "",
-    redirectUri: process.env.OAUTH_REDIRECT_URI ?? "",
-    allowedEmail: process.env.ALLOWED_GOOGLE_EMAIL ?? "",
-    adminToken: process.env.OAUTH_ADMIN_TOKEN ?? "",
-    projectId: process.env.GCP_PROJECT_ID ?? "",
-    refreshTokenSecret: process.env.REFRESH_TOKEN_SECRET_NAME ?? "",
-    imageFolderId: process.env.IMAGE_FOLDER_ID ?? "",
-    gardenLogSpreadsheetId: process.env.GARDEN_LOG_SPREADSHEET_ID ?? "",
-  };
-
-  const required: (keyof OAuthConfig)[] = [
-    "clientId",
-    "clientSecret",
-    "redirectUri",
-    "allowedEmail",
-    "adminToken",
-    "projectId",
-    "refreshTokenSecret",
-  ];
-  const missing = required.filter((key) => !config[key]);
-  if (missing.length > 0) {
-    console.error("OAuth config is incomplete; missing:", missing.join(", "));
-    return null;
-  }
-  return config;
-}
-
-function createClient(config: OAuthConfig): OAuth2Client {
-  return new OAuth2Client({
-    clientId: config.clientId,
-    clientSecret: config.clientSecret,
-    redirectUri: config.redirectUri,
-  });
-}
-
-// 7日失効の観測用。取得からの経過日数(小数2桁)
-function tokenAgeDays(stored: StoredRefreshToken): number {
-  return Math.round(((Date.now() - Date.parse(stored.obtained_at)) / 86_400_000) * 100) / 100;
-}
-
-function safeEqual(a: string, b: string): boolean {
-  const bufA = Buffer.from(a);
-  const bufB = Buffer.from(b);
-  return bufA.length === bufB.length && timingSafeEqual(bufA, bufB);
-}
 
 function readCookie(req: Request, name: string): string | null {
   const header = req.headers.cookie;
@@ -136,68 +69,15 @@ function sendPage(res: Response, status: number, title: string, lines: string[])
     );
 }
 
-/**
- * Google APIのエラーから、ログや応答に出しても安全な情報だけを取り出す。
- * エラーオブジェクト全体にはリクエスト設定(client_secret等)が含まれ得るため、
- * そのままログに出さない。
- */
-function describeGoogleError(err: unknown): { status?: number; reason?: string; message: string } {
-  const e = err as {
-    status?: number;
-    code?: number | string;
-    message?: string;
-    response?: { status?: number; data?: { error?: unknown; error_description?: string } };
-  };
-  const data = e.response?.data;
-  let reason: string | undefined;
-  if (typeof data?.error === "string") {
-    reason = data.error;
-  } else if (data?.error && typeof data.error === "object") {
-    const apiError = data.error as { status?: string; errors?: { reason?: string }[] };
-    reason = apiError.errors?.[0]?.reason ?? apiError.status;
-  }
-  return {
-    status: e.response?.status ?? e.status ?? (typeof e.code === "number" ? e.code : undefined),
-    reason,
-    message: data?.error_description ?? e.message ?? String(err),
-  };
-}
-
-// Express 4は非同期ハンドラーの例外を拾わないため、ここでnextへ渡す
-function asyncHandler(
-  handler: (req: Request, res: Response, next: NextFunction) => Promise<void>
-): RequestHandler {
-  return (req, res, next) => {
-    handler(req, res, next).catch(next);
-  };
-}
-
-export function createOAuthRouter(): Router {
+export function createOAuthRouter(config: GoogleConfig | null): Router {
   const router = Router();
-  const config = loadConfig();
-
-  router.use((_req, res, next) => {
-    if (!config) {
-      res.status(503).json({ error: "oauth_not_configured" });
-      return;
-    }
-    next();
-  });
-
-  const requireAdmin: RequestHandler = (req, res, next) => {
-    const token = req.header("x-admin-token") ?? "";
-    if (!config || !safeEqual(token, config.adminToken)) {
-      res.status(401).json({ error: "unauthorized" });
-      return;
-    }
-    next();
-  };
+  router.use(requireGoogleConfig(config));
 
   router.get(
     "/start",
     asyncHandler(async (_req, res) => {
       const cfg = config!;
-      const client = createClient(cfg);
+      const client = createOAuthClient(cfg);
       const state = randomBytes(32).toString("hex");
       const { codeVerifier, codeChallenge } = await client.generateCodeVerifierAsync();
 
@@ -252,7 +132,7 @@ export function createOAuthRouter(): Router {
         return;
       }
 
-      const client = createClient(cfg);
+      const client = createOAuthClient(cfg);
       let tokens;
       try {
         ({ tokens } = await client.getToken({ code, codeVerifier }));
@@ -318,60 +198,10 @@ export function createOAuthRouter(): Router {
     })
   );
 
-  /**
-   * 保存済みrefresh tokenでGoogle APIに接続できるクライアントを作る。
-   * refresh tokenが無い、または失効している場合はその理由を返す。
-   */
-  async function connectWithStoredToken(cfg: OAuthConfig): Promise<
-    | { ok: true; client: OAuth2Client; stored: StoredRefreshToken; scopes: string[]; accessTokenExpiresAt: string }
-    | { ok: false; body: Record<string, unknown> }
-  > {
-    const raw = await readLatestSecret(cfg.projectId, cfg.refreshTokenSecret);
-    if (!raw) {
-      return { ok: false, body: { refreshToken: { status: "not_connected" } } };
-    }
-    const stored = JSON.parse(raw) as StoredRefreshToken;
-    const tokenInfo = {
-      obtainedAt: stored.obtained_at,
-      ageDays: tokenAgeDays(stored),
-      grantedScope: stored.scope,
-    };
-
-    const client = createClient(cfg);
-    client.setCredentials({ refresh_token: stored.refresh_token });
-    try {
-      const { token } = await client.getAccessToken();
-      if (!token) {
-        throw new Error("no access token returned");
-      }
-      const info = await client.getTokenInfo(token);
-      return {
-        ok: true,
-        client,
-        stored,
-        scopes: info.scopes,
-        accessTokenExpiresAt: new Date(info.expiry_date).toISOString(),
-      };
-    } catch (err) {
-      return {
-        ok: false,
-        body: { refreshToken: { ...tokenInfo, status: "refresh_failed", error: describeGoogleError(err) } },
-      };
-    }
-  }
-
-  async function runCheck<T>(fn: () => Promise<T>): Promise<{ ok: true; result: T } | { ok: false; error: ReturnType<typeof describeGoogleError> }> {
-    try {
-      return { ok: true, result: await fn() };
-    } catch (err) {
-      return { ok: false, error: describeGoogleError(err) };
-    }
-  }
-
   // 既存データへのアクセス可否を読み取りだけで確かめる
   router.get(
     "/debug/check",
-    requireAdmin,
+    requireAdmin(config),
     asyncHandler(async (_req, res) => {
       const cfg = config!;
       const checkedAt = new Date().toISOString();
@@ -434,10 +264,9 @@ export function createOAuthRouter(): Router {
   // アプリが新規作成したテスト用フォルダ・スプレッドシートにだけ書き込む
   router.post(
     "/debug/write-test",
-    requireAdmin,
+    requireAdmin(config),
     asyncHandler(async (_req, res) => {
-      const cfg = config!;
-      const connection = await connectWithStoredToken(cfg);
+      const connection = await connectWithStoredToken(config!);
       if (!connection.ok) {
         res.json(connection.body);
         return;
