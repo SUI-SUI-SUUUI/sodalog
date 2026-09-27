@@ -16,8 +16,18 @@ import { createSerialQueue } from "./queue";
 import { ensurePhotoYearFolder, findFile, RECORDS_TAB, type StorageEnv } from "./storage";
 import { toJstIso } from "./time";
 
-// 現在の本番LIFFと同じ7項目
-export const WORK_TYPES = ["水やり", "肥料", "収穫", "剪定", "草取り", "植え付け", "その他"] as const;
+// 新しい記録画面の作業内容(この順で表示・保存する)。「その他」は使わない
+export const WORK_TYPES = [
+  "水やり",
+  "草取り",
+  "肥料",
+  "剪定",
+  "植え付け",
+  "植え替え",
+  "成長記録",
+  "収穫",
+  "撤去",
+] as const;
 
 export const PLANT_TAG_MAX_LENGTH = 20;
 export const PLANT_TAG_MAX_COUNT = 10;
@@ -134,7 +144,7 @@ export function normalizePlantTags(value: unknown): FieldResult<string[]> {
   return { ok: true, value: tags };
 }
 
-// 作業内容: 7項目のどれか。重複は除き、送られた順を保つ
+// 作業内容: 9項目のどれか。重複は除き、WORK_TYPES の順に並べ替える
 export function normalizeWorkTypes(value: unknown): FieldResult<string[]> {
   if (value === undefined) {
     return { ok: true, value: [] };
@@ -151,6 +161,9 @@ export function normalizeWorkTypes(value: unknown): FieldResult<string[]> {
       workTypes.push(item);
     }
   }
+  workTypes.sort(
+    (a, b) => (WORK_TYPES as readonly string[]).indexOf(a) - (WORK_TYPES as readonly string[]).indexOf(b)
+  );
   return { ok: true, value: workTypes };
 }
 

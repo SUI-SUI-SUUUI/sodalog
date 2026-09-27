@@ -67,10 +67,17 @@ test("植物タグ: 配列以外・文字列以外・制御文字は不可", () 
   assert.deepEqual(normalizePlantTags(["アジ\nサイ"]), { ok: false, reason: "invalid_characters" });
 });
 
-test("作業内容: 本番と同じ7項目だけ。重複は除き、送られた順を保つ", () => {
-  assert.deepEqual([...WORK_TYPES], ["水やり", "肥料", "収穫", "剪定", "草取り", "植え付け", "その他"]);
-  assert.deepEqual(normalizeWorkTypes(["剪定", "水やり", "剪定"]), { ok: true, value: ["剪定", "水やり"] });
+test("作業内容: 9項目だけ。重複は除き、決まった順に並べ替える", () => {
+  assert.deepEqual(
+    [...WORK_TYPES],
+    ["水やり", "草取り", "肥料", "剪定", "植え付け", "植え替え", "成長記録", "収穫", "撤去"]
+  );
+  assert.deepEqual(normalizeWorkTypes(["撤去", "剪定", "水やり", "剪定"]), {
+    ok: true,
+    value: ["水やり", "剪定", "撤去"],
+  });
   assert.deepEqual(normalizeWorkTypes(undefined), { ok: true, value: [] });
+  assert.deepEqual(normalizeWorkTypes(["その他"]), { ok: false, reason: "unknown_work_type" });
   assert.deepEqual(normalizeWorkTypes(["植替え"]), { ok: false, reason: "unknown_work_type" });
   assert.deepEqual(normalizeWorkTypes("剪定"), { ok: false, reason: "not_an_array" });
 });

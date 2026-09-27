@@ -11,9 +11,10 @@
       src="https://static.line-scdn.net/liff/edge/2/sdk.js"
     ></script>
     <!--
-      STEP 4-2b 検証用ページ(本番の liff/index.html とは別のLIFFアプリで開く)。
-      場所名だけのタイル(登録順で固定・画像なし)の表示と、場所名だけの登録を確かめる。
-      記録フォーム・写真・アルバムはまだ作らない。
+      検証用ページ(本番の liff/index.html とは別のLIFFアプリで開く)。
+      STEP 4-2b: 場所名だけのタイル(登録順で固定・画像なし)の表示と、場所名だけの登録。
+      STEP 4-3b: 場所を選んだあとの記録画面(作業日・写真1枚・作業内容・植物・メモ)と保存。
+      アルバムはまだ作らない。
     -->
     <style>
       :root {
@@ -146,9 +147,360 @@
 
       .secondary { border: 1px solid var(--accent); background: #fff; color: #3f6546; }
 
-      .selected-name { margin: 8px 0 4px; font-size: 24px; font-weight: 700; text-align: center; }
-
       .note { margin: 0 0 20px; color: var(--muted); font-size: 13px; text-align: center; line-height: 1.6; }
+
+      /*
+       * ---- 記録画面(docs/design/record-screen-board.html の Round 4＋5 を確定版として反映) ----
+       * 場所の色(--c-*)は場所ごとに JS で body に設定する(TONES)。ライトモードのみ。
+       * 古いiPhoneのLINE内ブラウザでも動くよう :has() は使わず、状態はクラスで切り替える。
+       */
+      body.recording { padding: 0; background: var(--c-bg); }
+
+      .record-screen { color: #26303a; }
+
+      .record-band { padding: 12px 16px; background: var(--c-band); }
+
+      .record-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+
+      /* 場所名は2行まで。長さに応じて 21px / 18px / 16px(placeSizeClass) */
+      .record-place {
+        flex: 1;
+        min-width: 0;
+        display: -webkit-box;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+        overflow: hidden;
+        color: var(--c-ink);
+        font-size: 21px;
+        font-weight: 700;
+        line-height: 1.3;
+        overflow-wrap: anywhere;
+      }
+
+      .record-place.size-m { font-size: 18px; }
+
+      .record-place.size-s { font-size: 16px; }
+
+      /* 「場所を変える」は1行固定 */
+      .change-place {
+        flex: none;
+        padding: 3px 0 6px;
+        border: 0;
+        background: none;
+        color: var(--c-strong);
+        font: inherit;
+        font-size: 13px;
+        font-weight: 700;
+        white-space: nowrap;
+        cursor: pointer;
+      }
+
+      .change-place:disabled { opacity: .5; }
+
+      .record-note { margin: 4px 0 0; color: #5f6873; font-size: 13px; }
+
+      /* 作業日: 枠全体が1つのボタン(左の日付を押しても、右の「変更」を押しても同じカレンダーが開く) */
+      .date-box {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        width: 100%;
+        margin-top: 8px;
+        padding: 6px 6px 6px 14px;
+        border: 1px solid var(--c-line);
+        border-radius: 12px;
+        background: #fff;
+        color: inherit;
+        font: inherit;
+        text-align: left;
+        cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      .date-box:focus-visible { outline: 3px solid var(--c-strong); outline-offset: 2px; }
+
+      .date-box .date-label { margin-right: 8px; color: #5f6873; font-size: 13px; font-weight: 700; }
+
+      .date-box .date-value { font-size: 16px; font-weight: 700; }
+
+      .date-box .change { flex: none; padding: 9px 16px; border-radius: 9px; background: var(--c-strong); color: #fff; font-size: 14px; font-weight: 700; }
+
+      .date-box:active .change { filter: brightness(.9); }
+
+      .record-body { padding: 12px 16px 0; }
+
+      /* 写真: 空の枠(ボタン)と、写真があるときの表示を別の要素にする */
+      .photo-stage {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        width: 100%;
+        height: 0;
+        padding-bottom: 75%; /* 4:3(aspect-ratio 非対応の古いブラウザでも同じ比率にする) */
+        border-radius: 16px;
+        overflow: hidden;
+      }
+
+      .photo-stage > .photo-inner { position: absolute; top: 0; right: 0; bottom: 0; left: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; }
+
+      .photo-empty { border: 1.5px dashed var(--c-line); background: var(--c-frame); color: var(--c-ink); font: inherit; cursor: pointer; }
+
+      .photo-empty:disabled { cursor: wait; }
+
+      .photo-empty .t { font-size: 16px; font-weight: 700; }
+
+      .photo-empty .s { color: #5f6873; font-size: 12px; }
+
+      .photo-filled { background: #eef2ee; }
+
+      .photo-filled img { position: absolute; top: 0; right: 0; bottom: 0; left: 0; width: 100%; height: 100%; object-fit: cover; cursor: pointer; }
+
+      .photo-over { position: absolute; right: 10px; bottom: 10px; display: flex; gap: 6px; }
+
+      .photo-over button { padding: 7px 12px; border: 0; border-radius: 999px; background: rgba(38, 48, 58, .72); color: #fff; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+
+      .record-label { margin: 14px 0 8px; color: #5f6873; font-size: 12px; font-weight: 700; letter-spacing: .06em; }
+
+      /* 作業内容: 3列×3行で位置を固定 */
+      .work-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+
+      .work-cell {
+        height: 50px;
+        border: 1px solid var(--c-line);
+        border-radius: 12px;
+        background: #fff;
+        color: #26303a;
+        font: inherit;
+        font-size: 15px;
+        cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      .work-cell[aria-pressed="true"] { border-color: var(--c-chip); background: var(--c-chip); color: #fff; font-weight: 700; }
+
+      /* 「植物・メモを書く」(開いたら .open で内側を場所色の淡い面にする) */
+      .fold { margin-top: 14px; border: 1px solid var(--c-line); border-radius: 12px; background: #fff; overflow: hidden; }
+
+      .fold.open { background: var(--c-inner); }
+
+      .more-toggle {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        width: 100%;
+        padding: 13px 14px;
+        border: 0;
+        background: none;
+        color: #26303a;
+        font: inherit;
+        font-size: 15px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      .more-toggle .meta { color: var(--c-strong); font-size: 13px; font-weight: 700; }
+
+      .more { padding: 0 14px 12px; }
+
+      .more .record-label:first-child { margin-top: 2px; }
+
+      .tag-field { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 8px; border: 1px solid var(--c-line); border-radius: 10px; background: #fff; }
+
+      .tag-field.focused { outline: 2px solid var(--c-strong); outline-offset: -1px; }
+
+      .tag-field input { flex: 1; min-width: 120px; padding: 6px 4px; border: 0; background: none; color: inherit; font: inherit; font-size: 16px; outline: none; }
+
+      .tag-field .add { padding: 6px 12px; border: 0; border-radius: 8px; background: var(--c-frame); color: var(--c-strong); font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
+
+      .tags { display: contents; }
+
+      .tag { display: inline-flex; align-items: center; padding: 4px 2px 4px 12px; border-radius: 999px; background: var(--c-band); color: var(--c-ink); font-size: 15px; }
+
+      .tag button { width: 30px; height: 30px; border: 0; background: none; color: #5f6873; font-size: 17px; cursor: pointer; }
+
+      .memo {
+        display: block;
+        width: 100%;
+        min-height: 84px;
+        padding: 11px 12px;
+        border: 1px solid var(--c-line);
+        border-radius: 10px;
+        background: #fff;
+        color: inherit;
+        font: inherit;
+        font-size: 16px;
+        line-height: 1.5;
+        resize: none;
+      }
+
+      .memo:focus { outline: 2px solid var(--c-strong); outline-offset: -1px; }
+
+      .field-error { margin: 6px 0 0; color: var(--error-text); font-size: 13px; }
+
+      .counter { margin: 4px 0 0; color: #5f6873; font-size: 12px; text-align: right; }
+
+      .counter.over { color: var(--error-text); }
+
+      /* 保存欄: 画面下に固定。左に入力内容の要約、右に保存ボタン(場所色で最も濃い色＋白文字) */
+      .savebar {
+        position: -webkit-sticky;
+        position: sticky;
+        bottom: 0;
+        z-index: 2;
+        margin-top: 16px;
+        padding: 10px 16px calc(14px + env(safe-area-inset-bottom, 0px));
+        border-top: 1px solid var(--c-line);
+        background: #fff;
+      }
+
+      .save-row { display: flex; align-items: center; gap: 12px; }
+
+      .summary { flex: 1; min-width: 0; color: #5f6873; font-size: 13px; line-height: 1.4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+      .summary b { color: #26303a; }
+
+      .save {
+        flex: none;
+        width: 132px;
+        height: 48px;
+        border: 0;
+        border-radius: 12px;
+        background: var(--c-strong);
+        color: #fff;
+        font: inherit;
+        font-size: 16px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      .save:disabled { background: var(--c-disabled); cursor: default; }
+
+      .save.saving { background: var(--c-strong); opacity: .7; cursor: wait; }
+
+      .save-error { margin: 0 0 8px; padding: 9px 12px; border-radius: 10px; background: var(--error-bg); color: var(--error-text); font-size: 13px; line-height: 1.5; }
+
+      .toast {
+        position: fixed;
+        left: 50%;
+        bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+        z-index: 30;
+        width: max-content;
+        max-width: calc(100% - 32px);
+        padding: 12px 18px;
+        border-radius: 12px;
+        background: #2d4a33;
+        color: #fff;
+        font-weight: 700;
+        text-align: center;
+        transform: translateX(-50%);
+        box-shadow: 0 6px 20px rgba(0, 0, 0, .18);
+      }
+
+      /* ---- 作業日のカレンダー(画面の下から出るシート) ---- */
+      html.cal-open, html.cal-open body { overflow: hidden; }
+
+      .cal-overlay {
+        position: fixed;
+        top: 0; right: 0; bottom: 0; left: 0;
+        z-index: 40;
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+        background: rgba(20, 28, 40, .4);
+        color: #26303a;
+      }
+
+      .cal-sheet {
+        width: 100%;
+        max-width: 520px;
+        max-height: 100%;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        padding: 12px 16px calc(18px + env(safe-area-inset-bottom, 0px));
+        border-radius: 20px 20px 0 0;
+        background: #fff;
+      }
+
+      .cal-top { display: flex; align-items: center; justify-content: space-between; }
+
+      .cal-title { margin: 0; font-size: 17px; font-weight: 700; }
+
+      .cal-close { display: inline-flex; align-items: center; gap: 4px; min-height: 40px; padding: 0 10px; border: 0; border-radius: 10px; background: #f0f2f5; color: #3a4450; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
+
+      .cal-close span { font-size: 18px; line-height: 1; }
+
+      .cal-picked { margin: 8px 0 10px; padding: 10px 12px; border-radius: 12px; background: var(--c-frame); color: #5f6873; font-size: 14px; }
+
+      .cal-picked b { margin-left: 6px; color: var(--c-ink); font-size: 20px; }
+
+      .cal-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+
+      .cal-nav .month { font-size: 18px; font-weight: 700; }
+
+      .cal-nav button { width: 44px; height: 44px; border: 1px solid var(--c-line); border-radius: 12px; background: #fff; color: var(--c-strong); font: inherit; font-size: 20px; font-weight: 700; cursor: pointer; }
+
+      .cal-nav button:disabled { border-color: #eceff2; color: #c5cad1; cursor: default; }
+
+      .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+
+      .cal-week { padding: 4px 0; color: #6b7480; font-size: 12px; font-weight: 700; text-align: center; }
+
+      .cal-week.sun, .cal-day.sun { color: #b0464a; }
+
+      .cal-week.sat, .cal-day.sat { color: #3c5ea3; }
+
+      .cal-day {
+        position: relative;
+        height: 0;
+        padding-bottom: 100%; /* 正方形 */
+        border: 0;
+        border-radius: 12px;
+        background: none;
+        color: #26303a;
+        font: inherit;
+        font-size: 17px;
+        cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      .cal-day > span { position: absolute; top: 0; right: 0; bottom: 0; left: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+
+      .cal-day:not(:disabled):active { background: var(--c-frame); }
+
+      /* 今日: 枠線と「今日」の小さな文字 */
+      .cal-day.today { box-shadow: inset 0 0 0 2px var(--c-chip); font-weight: 700; }
+
+      .cal-day .today-mark { font-size: 10px; font-weight: 700; line-height: 1; color: var(--c-chip); }
+
+      /* 選んでいる日: 場所色で最も濃い色で塗りつぶし */
+      .cal-day.selected { background: var(--c-strong); color: #fff; font-weight: 700; box-shadow: none; }
+
+      .cal-day.selected .today-mark { color: #fff; }
+
+      /* 未来の日は選べない */
+      .cal-day:disabled { color: #c5cad1; cursor: default; }
+
+      .cal-legend { display: flex; gap: 14px; margin: 8px 2px 0; color: #6b7480; font-size: 12px; }
+
+      .cal-legend i { display: inline-block; width: 12px; height: 12px; margin-right: 4px; border-radius: 4px; vertical-align: -1px; }
+
+      .cal-legend .l-today { box-shadow: inset 0 0 0 2px var(--c-chip); }
+
+      .cal-legend .l-selected { background: var(--c-strong); }
+
+      .cal-today-link { margin-top: 10px; padding: 6px 0; border: 0; background: none; color: var(--c-strong); font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
+
+      .cal-actions { display: flex; gap: 10px; margin-top: 14px; }
+
+      .cal-actions button { flex: 1; height: 50px; border-radius: 12px; font: inherit; font-size: 16px; font-weight: 700; cursor: pointer; }
+
+      .cal-actions .cancel { border: 1px solid #cfd5dc; background: #fff; color: #3a4450; }
+
+      .cal-actions .ok { border: 0; background: var(--c-strong); color: #fff; }
     </style>
   </head>
   <body>
@@ -174,14 +526,71 @@
         </form>
       </section>
 
-      <section id="selectedScreen" class="card hidden">
-        <p class="description">記録する場所</p>
-        <p id="selectedName" class="selected-name"></p>
-        <p id="selectedNote" class="note"></p>
-        <p class="note">記録フォームは次のステップ（4-3）で作ります。</p>
-        <button id="backToPicker" class="button secondary" type="button" style="width: 100%">場所を選び直す</button>
+      <section id="recordScreen" class="record-screen hidden">
+        <div class="record-band">
+          <div class="record-top">
+            <div id="recordPlace" class="record-place"></div>
+            <button id="changePlace" class="change-place" type="button">場所を変える</button>
+          </div>
+          <p id="recordNote" class="record-note hidden"></p>
+          <button id="workDateButton" class="date-box" type="button">
+            <span><span class="date-label">作業日</span><span id="workDateText" class="date-value"></span></span>
+            <span class="change">変更</span>
+          </button>
+        </div>
+
+        <div class="record-body">
+          <button id="photoButton" class="photo-stage photo-empty" type="button">
+            <span class="photo-inner">
+              <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 8h3l2-2h6l2 2h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>
+              <span id="photoButtonText" class="t">写真を撮る・選ぶ</span>
+              <span class="s">1枚まで・なくても保存できます</span>
+            </span>
+          </button>
+          <div id="photoPreview" class="photo-stage photo-filled hidden">
+            <img id="photoImage" alt="選んだ写真">
+            <div class="photo-over">
+              <button id="photoChange" type="button">変える</button>
+              <button id="photoRemove" type="button">外す</button>
+            </div>
+          </div>
+          <input id="photoInput" type="file" accept="image/*" class="hidden">
+          <p id="photoStatus" class="field-error hidden"></p>
+
+          <div class="record-label">作業内容</div>
+          <div id="workChips" class="work-grid"></div>
+
+          <div id="fold" class="fold">
+            <button id="moreToggle" class="more-toggle" type="button" aria-expanded="false" aria-controls="moreArea">
+              <span>植物・メモを書く</span>
+              <span id="moreMeta" class="meta">＋</span>
+            </button>
+            <div id="moreArea" class="more hidden">
+              <div class="record-label">植物 <span style="font-weight: 400">（10個まで）</span></div>
+              <div id="tagField" class="tag-field">
+                <span id="tags" class="tags"></span>
+                <input id="tagInput" type="text" autocomplete="off" enterkeyhint="done" placeholder="例：アジサイ" aria-label="植物の名前">
+                <button id="tagAdd" class="add" type="button">追加</button>
+              </div>
+              <p id="tagError" class="field-error hidden"></p>
+              <div class="record-label">メモ</div>
+              <textarea id="memoInput" class="memo" placeholder="気づいたことなど" aria-label="メモ"></textarea>
+              <p id="memoCounter" class="counter">0 / 300</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="savebar">
+          <p id="saveError" class="save-error hidden"></p>
+          <div class="save-row">
+            <div id="saveSummary" class="summary"></div>
+            <button id="saveButton" class="save" type="button">保存する</button>
+          </div>
+        </div>
       </section>
     </main>
+
+    <div id="toast" class="toast hidden" role="status"></div>
 
     <script>
       // 検証用LIFFアプリのID(本番LIFFとは別アプリ。エンドポイント: /sodalog/beta/)
@@ -189,6 +598,16 @@
       const API_BASE = "https://sodalog-server-484567695262.asia-northeast1.run.app";
       const CACHE_KEY = "sodalog.beta.locations.v1";
       const NAME_MAX_LENGTH = 20;
+
+      // 記録の入力(サーバーと同じ規則。docs/sodalog-spec.md 3.1節・6章・12.9節)
+      const WORK_TYPES = ["水やり", "草取り", "肥料", "剪定", "植え付け", "植え替え", "成長記録", "収穫", "撤去"];
+      const TAG_MAX_LENGTH = 20;
+      const TAG_MAX_COUNT = 10;
+      const MEMO_MAX_LENGTH = 300;
+      // 写真: 長辺1600pxに縮小してJPEG品質0.8。3MBを超える場合だけ0.7、0.6と下げて圧縮し直す
+      const PHOTO_MAX_EDGE = 1600;
+      const PHOTO_QUALITIES = [0.8, 0.7, 0.6];
+      const PHOTO_MAX_BYTES = 3 * 1024 * 1024;
 
       // 場所IDから決める淡い色(文字色 #1f3323 とのコントラストを十分に取れる明るさ)
       const PALETTE = [
@@ -201,6 +620,25 @@
         "#f5ecc8", // 菜の花
         "#e0e8e0", // 苔
       ];
+
+      /*
+       * 記録画面用の場所色の濃淡(PALETTE と同じ順。docs/design/record-screen-board.html Round 5)。
+       * 元の色の色相のまま明るさだけを変えたもの。白文字を載せる chip・strong は白とのコントラスト比
+       * 4.8・7.0 以上、ink は band 上で 8.5 以上。
+       *   bg: 画面の地 / band: 場所帯 / frame: 写真枠 / inner: 折りたたみの内側 / line: 枠線
+       *   disabled: 押せない保存ボタン / chip: 選択中の作業 / strong: 保存・変更(最も濃い) / ink: 場所名など
+       */
+      const TONES = [
+        { bg: "#fbfdfa", band: "#f0f5e8", frame: "#f4f8ef", inner: "#f7f9f3", line: "#dce4d1", disabled: "#c4ccb8", chip: "#5f7a39", strong: "#495e2c", ink: "#3a4b23" }, // 若葉
+        { bg: "#fef9f9", band: "#f9e6e4", frame: "#fbeeec", inner: "#fcf1f1", line: "#eaccca", disabled: "#d3b3b1", chip: "#b6544c", strong: "#923e37", ink: "#6b2e29" }, // 桜
+        { bg: "#f9fafd", band: "#e5eaf7", frame: "#edf0fa", inner: "#f1f4fb", line: "#ccd3e8", disabled: "#b3bad1", chip: "#556eb9", strong: "#3c559f", ink: "#2c3e74" }, // 空
+        { bg: "#fdfcf9", band: "#f7f0e6", frame: "#f9f5ee", inner: "#fbf7f2", line: "#e7ddcd", disabled: "#d0c5b4", chip: "#8b6c39", strong: "#6d5329", ink: "#554120" }, // 砂
+        { bg: "#fafcfc", band: "#e9f4f2", frame: "#f0f7f6", inner: "#f3f9f8", line: "#d1e3df", disabled: "#b8cbc7", chip: "#3d7d70", strong: "#2f6056", ink: "#254b44" }, // 水
+        { bg: "#fcfafd", band: "#f1e9f4", frame: "#f6f0f8", inner: "#f8f3f9", line: "#dfd1e3", disabled: "#c7b8cb", chip: "#9958ae", strong: "#79438b", ink: "#583165" }, // 藤
+        { bg: "#fefdf9", band: "#faf5e3", frame: "#fbf8ec", inner: "#fcfaf0", line: "#ece5c8", disabled: "#d5cdaf", chip: "#817135", strong: "#645726", ink: "#4f461e" }, // 菜の花
+        { bg: "#fafcfa", band: "#eaf3ea", frame: "#f1f6f1", inner: "#f4f8f4", line: "#d4e0d4", disabled: "#bbc9bb", chip: "#4b7c4b", strong: "#3a613a", ink: "#2d4b2d" }, // 苔
+      ];
+      const TONE_VARS = ["bg", "band", "frame", "inner", "line", "disabled", "chip", "strong", "ink"];
 
       /*
        * PCのブラウザで見た目だけ確かめるためのプレビュー。
@@ -218,7 +656,13 @@
       const nameError = document.getElementById("nameError");
       const submitAdd = document.getElementById("submitAdd");
       const pickerScreen = document.getElementById("pickerScreen");
-      const selectedScreen = document.getElementById("selectedScreen");
+      const recordScreen = document.getElementById("recordScreen");
+      const photoInput = document.getElementById("photoInput");
+      const tagInput = document.getElementById("tagInput");
+      const tagError = document.getElementById("tagError");
+      const memoInput = document.getElementById("memoInput");
+      const saveButton = document.getElementById("saveButton");
+      const saveError = document.getElementById("saveError");
 
       let locations = [];
       let liffReady = false;
@@ -243,13 +687,22 @@
       }
 
       // 場所ID(文字列)から、いつも同じパレットの番号を返す(FNV-1a)
-      function colorFor(id) {
+      function paletteIndex(id) {
         let hash = 0x811c9dc5;
         for (let i = 0; i < id.length; i++) {
           hash ^= id.charCodeAt(i);
           hash = Math.imul(hash, 0x01000193) >>> 0;
         }
-        return PALETTE[hash % PALETTE.length];
+        return hash % PALETTE.length;
+      }
+
+      function colorFor(id) {
+        return PALETTE[paletteIndex(id)];
+      }
+
+      // 記録画面の場所色(タイルと同じ色の濃淡)
+      function toneFor(id) {
+        return TONES[paletteIndex(id)];
       }
 
       function sizeClass(name) {
@@ -294,7 +747,7 @@
             tile.style.background = colorFor(location.id);
             tile.textContent = location.name;
             tile.addEventListener("click", function () {
-              showSelected(location, "");
+              openRecord(location, "");
             });
             row.append(tile);
           });
@@ -326,17 +779,22 @@
         addButton.classList.toggle("hidden", locations.length === 0);
       }
 
-      function showSelected(location, note) {
-        document.getElementById("selectedName").textContent = location.name;
-        document.getElementById("selectedNote").textContent = note;
-        pickerScreen.classList.add("hidden");
-        selectedScreen.classList.remove("hidden");
+      function showPicker() {
+        recordScreen.classList.add("hidden");
+        pickerScreen.classList.remove("hidden");
         window.scrollTo({ top: 0 });
       }
 
-      function showPicker() {
-        selectedScreen.classList.add("hidden");
-        pickerScreen.classList.remove("hidden");
+      let toastTimer = null;
+
+      function showToast(message) {
+        const toast = document.getElementById("toast");
+        toast.textContent = message;
+        toast.classList.remove("hidden");
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(function () {
+          toast.classList.add("hidden");
+        }, 2500);
       }
 
       function readCache() {
@@ -431,7 +889,23 @@
         return { id: "loc_preview" + String(i).padStart(2, "0"), name: name, createdAt: "" };
       });
 
+      // ?failsave=1 を付けると、最初の保存だけ失敗させて「もう一度保存」を確かめられる
+      let previewSaveFailed = false;
+
       async function previewApi(method, path, body) {
+        if (path === "/api/records") {
+          await new Promise(function (resolve) { setTimeout(resolve, 1500); });
+          if (params.has("failsave") && !previewSaveFailed) {
+            previewSaveFailed = true;
+            throw new ApiError(0, "preview_failure");
+          }
+          const logged = Object.assign({}, body);
+          if (body.photo) {
+            logged.photo = "(base64 " + body.photo.data.length + "文字)";
+          }
+          console.log("プレビュー: 保存する内容", JSON.stringify(logged));
+          return { created: true, record: body };
+        }
         if (method === "GET") {
           return { locations: previewStore.slice() };
         }
@@ -487,7 +961,7 @@
             setLocations(locations.concat([data.location]));
           }
           closeAddForm();
-          showSelected(data.location, data.created ? "" : "すでに登録されている場所です。");
+          openRecord(data.location, data.created ? "" : "すでに登録されている場所です。");
         } catch (error) {
           console.error("場所の登録エラー", error);
           nameError.textContent = error instanceof ApiError && error.code === "invalid_name"
@@ -500,7 +974,659 @@
         }
       });
 
-      document.getElementById("backToPicker").addEventListener("click", showPicker);
+      // ---- 記録画面 ----
+      const record = {
+        location: null,
+        workDate: "",
+        workTypes: [],
+        tags: [],
+        photo: null, // { base64, url, bytes, quality }
+        photoBusy: false,
+        moreOpen: false,
+        // 保存に失敗したら同じ記録IDのまま再送する(サーバーは同じ記録IDを二重に保存しない)
+        pendingRecordId: null,
+        saving: false,
+      };
+
+      // 日本時間の今日(YYYY-MM-DD)。サーバーが確かめる作業日の上限と同じ基準
+      function todayJst() {
+        return new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      }
+
+      // 保存はISO形式、表示は 2026/09/27 形式(docs/sodalog-spec.md 12.7節)
+      function formatDate(iso) {
+        return iso.replace(/-/g, "/") + (iso === todayJst() ? "（今日）" : "");
+      }
+
+      function newRecordId() {
+        if (window.crypto && typeof window.crypto.randomUUID === "function") {
+          return window.crypto.randomUUID();
+        }
+        const bytes = window.crypto.getRandomValues(new Uint8Array(16));
+        bytes[6] = (bytes[6] & 0x0f) | 0x40;
+        bytes[8] = (bytes[8] & 0x3f) | 0x80;
+        const hex = Array.from(bytes, function (b) { return b.toString(16).padStart(2, "0"); }).join("");
+        return [hex.slice(0, 8), hex.slice(8, 12), hex.slice(12, 16), hex.slice(16, 20), hex.slice(20)].join("-");
+      }
+
+      // 記録画面の場所名: 8文字まで 21px / 14文字まで 18px / それ以上 16px(2行まで)
+      function placeSizeClass(name) {
+        const length = Array.from(name).length;
+        return length <= 8 ? "" : length <= 14 ? "size-m" : "size-s";
+      }
+
+      function applyTone(tone) {
+        TONE_VARS.forEach(function (name) {
+          document.body.style.setProperty("--c-" + name, tone[name]);
+        });
+      }
+
+      function memoLength() {
+        return Array.from(memoInput.value.replace(/\r\n?/g, "\n").trim()).length;
+      }
+
+      // 記録の成立条件: 場所 + (写真・作業内容・植物・メモのどれか1つ以上)
+      function hasContent() {
+        return Boolean(
+          record.photo ||
+          record.workTypes.length > 0 ||
+          record.tags.length > 0 ||
+          tagInput.value.trim() !== "" ||
+          memoInput.value.trim() !== ""
+        );
+      }
+
+      function showFieldError(element, message) {
+        element.textContent = message || "";
+        element.classList.toggle("hidden", !message);
+      }
+
+      function renderWorkDate() {
+        const text = formatDate(record.workDate);
+        document.getElementById("workDateText").textContent = text;
+        document.getElementById("workDateButton").setAttribute("aria-label", "作業日 " + text + "。押すと変更できます");
+      }
+
+      function renderWorkChips() {
+        const container = document.getElementById("workChips");
+        container.replaceChildren();
+        WORK_TYPES.forEach(function (workType) {
+          const chip = document.createElement("button");
+          chip.type = "button";
+          chip.className = "work-cell";
+          chip.textContent = workType;
+          chip.setAttribute("aria-pressed", String(record.workTypes.includes(workType)));
+          chip.addEventListener("click", function () {
+            if (record.saving) {
+              return;
+            }
+            record.workTypes = record.workTypes.includes(workType)
+              ? record.workTypes.filter(function (w) { return w !== workType; })
+              : record.workTypes.concat([workType]);
+            renderWorkChips();
+            updateSaveState();
+          });
+          container.append(chip);
+        });
+      }
+
+      function renderTags() {
+        const container = document.getElementById("tags");
+        container.replaceChildren();
+        record.tags.forEach(function (tag) {
+          const item = document.createElement("span");
+          item.className = "tag";
+          item.append(document.createTextNode(tag));
+          const remove = document.createElement("button");
+          remove.type = "button";
+          remove.textContent = "×";
+          remove.setAttribute("aria-label", tag + " を外す");
+          remove.addEventListener("click", function () {
+            if (record.saving) {
+              return;
+            }
+            record.tags = record.tags.filter(function (t) { return t !== tag; });
+            renderTags();
+            updateSaveState();
+          });
+          item.append(remove);
+          container.append(item);
+        });
+      }
+
+      // サーバーと同じ規則(NFKC・前後の空白除去・1つ20文字まで・10個まで・重複は除く)
+      function addTagFromInput() {
+        const tag = tagInput.value.normalize("NFKC").trim();
+        if (!tag) {
+          tagInput.value = "";
+          showFieldError(tagError, "");
+          return true;
+        }
+        if (/[\u0000-\u001f\u007f]/.test(tag)) {
+          showFieldError(tagError, "使えない文字が含まれています。");
+          return false;
+        }
+        if (Array.from(tag).length > TAG_MAX_LENGTH) {
+          showFieldError(tagError, "1つ20文字以内で入力してください。");
+          return false;
+        }
+        if (!record.tags.includes(tag)) {
+          if (record.tags.length >= TAG_MAX_COUNT) {
+            showFieldError(tagError, "植物は10個までです。");
+            return false;
+          }
+          record.tags = record.tags.concat([tag]);
+        }
+        tagInput.value = "";
+        showFieldError(tagError, "");
+        renderTags();
+        updateSaveState();
+        return true;
+      }
+
+      function renderMemoCounter() {
+        const length = memoLength();
+        const counter = document.getElementById("memoCounter");
+        counter.textContent = length + " / " + MEMO_MAX_LENGTH;
+        counter.classList.toggle("over", length > MEMO_MAX_LENGTH);
+      }
+
+      function renderPhoto() {
+        const hasPhoto = Boolean(record.photo);
+        const button = document.getElementById("photoButton");
+        button.classList.toggle("hidden", hasPhoto);
+        button.disabled = record.photoBusy;
+        document.getElementById("photoButtonText").textContent = record.photoBusy ? "写真を準備しています…" : "写真を撮る・選ぶ";
+        document.getElementById("photoPreview").classList.toggle("hidden", !hasPhoto);
+        const image = document.getElementById("photoImage");
+        if (hasPhoto) {
+          image.src = record.photo.url;
+        } else {
+          image.removeAttribute("src");
+        }
+      }
+
+      function setMoreOpen(open) {
+        record.moreOpen = open;
+        document.getElementById("fold").classList.toggle("open", open);
+        document.getElementById("moreArea").classList.toggle("hidden", !open);
+        document.getElementById("moreToggle").setAttribute("aria-expanded", String(open));
+        updateSaveState();
+      }
+
+      function renderMoreMeta() {
+        const meta = document.getElementById("moreMeta");
+        if (record.moreOpen) {
+          meta.textContent = "閉じる";
+          return;
+        }
+        const bits = [];
+        if (record.tags.length) {
+          bits.push("植物" + record.tags.length);
+        }
+        if (memoInput.value.trim()) {
+          bits.push("メモあり");
+        }
+        meta.textContent = bits.length ? bits.join("・") + "　＋" : "＋";
+      }
+
+      // 保存欄の要約(例: 水やり・剪定・写真1枚・植物2・メモ)
+      function renderSummary(content) {
+        const summary = document.getElementById("saveSummary");
+        summary.replaceChildren();
+        if (!content) {
+          summary.textContent = "作業・写真・植物・メモのどれか1つで保存できます";
+          return;
+        }
+        const works = WORK_TYPES.filter(function (w) { return record.workTypes.includes(w); });
+        const rest = [];
+        if (record.photo) {
+          rest.push("写真1枚");
+        }
+        const tagCount = record.tags.length + (tagInput.value.trim() ? 1 : 0);
+        if (tagCount) {
+          rest.push("植物" + tagCount);
+        }
+        if (memoInput.value.trim()) {
+          rest.push("メモ");
+        }
+        if (works.length) {
+          const bold = document.createElement("b");
+          bold.textContent = works.join("・");
+          summary.append(bold);
+          if (rest.length) {
+            summary.append(document.createTextNode("・"));
+          }
+        }
+        summary.append(document.createTextNode(rest.join("・")));
+      }
+
+      function updateSaveState() {
+        const content = hasContent();
+        saveButton.disabled = record.saving || record.photoBusy || !content || memoLength() > MEMO_MAX_LENGTH;
+        saveButton.classList.toggle("saving", record.saving);
+        saveButton.textContent = record.saving
+          ? "保存しています…"
+          : record.pendingRecordId ? "もう一度保存" : "保存する";
+        document.getElementById("changePlace").disabled = record.saving;
+        renderSummary(content);
+        renderMoreMeta();
+      }
+
+      function setPhoto(photo) {
+        if (record.photo) {
+          URL.revokeObjectURL(record.photo.url);
+        }
+        record.photo = photo;
+        renderPhoto();
+        updateSaveState();
+      }
+
+      function openRecord(location, note) {
+        record.location = location;
+        record.workDate = todayJst();
+        record.workTypes = [];
+        record.tags = [];
+        record.pendingRecordId = null;
+        record.saving = false;
+        record.photoBusy = false;
+        setPhoto(null);
+        tagInput.value = "";
+        memoInput.value = "";
+        showFieldError(tagError, "");
+        showFieldError(document.getElementById("photoStatus"), "");
+        saveError.classList.add("hidden");
+
+        applyTone(toneFor(location.id));
+        const place = document.getElementById("recordPlace");
+        place.textContent = location.name;
+        place.className = "record-place " + placeSizeClass(location.name);
+        const noteEl = document.getElementById("recordNote");
+        noteEl.textContent = note;
+        noteEl.classList.toggle("hidden", !note);
+
+        renderWorkDate();
+        renderWorkChips();
+        renderTags();
+        renderMemoCounter();
+        setMoreOpen(false);
+
+        pickerScreen.classList.add("hidden");
+        recordScreen.classList.remove("hidden");
+        document.body.classList.add("recording");
+        window.scrollTo(0, 0);
+      }
+
+      // ---- 作業日のカレンダー(画面の下から出るシート) ----
+      // 日を押しただけでは決まらず「この日にする」で決定。閉じる・キャンセル・背景・Esc は元の日付のまま。
+      // 過去はさかのぼり制限なし、未来の日は選べない。
+      const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
+
+      function openCalendar() {
+        if (record.saving || document.querySelector(".cal-overlay")) {
+          return;
+        }
+        const opener = document.getElementById("workDateButton");
+        const today = todayJst();
+        let picked = record.workDate;
+        let view = picked.slice(0, 7);
+
+        const overlay = document.createElement("div");
+        overlay.className = "cal-overlay";
+        overlay.innerHTML =
+          '<div class="cal-sheet" role="dialog" aria-modal="true" aria-label="作業日を選ぶ">' +
+          '<div class="cal-top"><p class="cal-title">作業日を選ぶ</p>' +
+          '<button class="cal-close" type="button" data-cal-close><span aria-hidden="true">×</span>閉じる</button></div>' +
+          '<div class="cal-picked">選択中<b data-cal-picked></b></div>' +
+          '<div class="cal-nav">' +
+          '<button type="button" data-cal-prev aria-label="前の月">‹</button>' +
+          '<span class="month" data-cal-month aria-live="polite"></span>' +
+          '<button type="button" data-cal-next aria-label="次の月">›</button></div>' +
+          '<div class="cal-grid" data-cal-grid></div>' +
+          '<div class="cal-legend"><span><i class="l-today"></i>今日</span><span><i class="l-selected"></i>選んでいる日</span></div>' +
+          '<button class="cal-today-link" type="button" data-cal-today>今日にする</button>' +
+          '<div class="cal-actions">' +
+          '<button class="cancel" type="button" data-cal-close>キャンセル</button>' +
+          '<button class="ok" type="button" data-cal-ok>この日にする</button></div>' +
+          "</div>";
+        document.body.append(overlay);
+        document.documentElement.classList.add("cal-open");
+
+        function render() {
+          const parts = view.split("-").map(Number);
+          const year = parts[0];
+          const month = parts[1];
+          overlay.querySelector("[data-cal-month]").textContent = year + "年" + month + "月";
+          overlay.querySelector("[data-cal-picked]").textContent = formatDate(picked);
+          overlay.querySelector("[data-cal-next]").disabled = view >= today.slice(0, 7);
+
+          const grid = overlay.querySelector("[data-cal-grid]");
+          grid.replaceChildren();
+          WEEKDAYS.forEach(function (name, i) {
+            const cell = document.createElement("div");
+            cell.className = "cal-week" + (i === 0 ? " sun" : i === 6 ? " sat" : "");
+            cell.textContent = name;
+            grid.append(cell);
+          });
+          const offset = new Date(Date.UTC(year, month - 1, 1)).getUTCDay();
+          const days = new Date(Date.UTC(year, month, 0)).getUTCDate();
+          for (let i = 0; i < offset; i++) {
+            grid.append(document.createElement("span"));
+          }
+          for (let day = 1; day <= days; day++) {
+            const iso = year + "-" + String(month).padStart(2, "0") + "-" + String(day).padStart(2, "0");
+            const weekday = (offset + day - 1) % 7;
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "cal-day" + (weekday === 0 ? " sun" : weekday === 6 ? " sat" : "");
+            button.disabled = iso > today;
+            const inner = document.createElement("span");
+            inner.append(document.createTextNode(String(day)));
+            if (iso === today) {
+              button.classList.add("today");
+              const mark = document.createElement("span");
+              mark.className = "today-mark";
+              mark.textContent = "今日";
+              inner.append(mark);
+            }
+            button.append(inner);
+            if (iso === picked) {
+              button.classList.add("selected");
+              button.setAttribute("aria-pressed", "true");
+            }
+            button.setAttribute("aria-label", month + "月" + day + "日" + (iso === today ? "（今日）" : ""));
+            button.addEventListener("click", function () {
+              picked = iso;
+              render();
+            });
+            grid.append(button);
+          }
+        }
+
+        function shiftMonth(delta) {
+          const parts = view.split("-").map(Number);
+          view = new Date(Date.UTC(parts[0], parts[1] - 1 + delta, 1)).toISOString().slice(0, 7);
+          render();
+        }
+
+        function close() {
+          overlay.remove();
+          document.documentElement.classList.remove("cal-open");
+          document.removeEventListener("keydown", onKey);
+          opener.focus({ preventScroll: true });
+        }
+
+        function onKey(event) {
+          if (event.key === "Escape") {
+            close();
+          }
+        }
+
+        overlay.addEventListener("click", function (event) {
+          if (event.target === overlay || event.target.closest("[data-cal-close]")) {
+            close();
+          } else if (event.target.closest("[data-cal-prev]")) {
+            shiftMonth(-1);
+          } else if (event.target.closest("[data-cal-next]")) {
+            shiftMonth(1);
+          } else if (event.target.closest("[data-cal-today]")) {
+            picked = today;
+            view = today.slice(0, 7);
+            render();
+          } else if (event.target.closest("[data-cal-ok]")) {
+            // 開いている間に日付をまたいだ場合も未来にはしない
+            record.workDate = picked <= todayJst() ? picked : todayJst();
+            renderWorkDate();
+            close();
+          }
+        });
+        document.addEventListener("keydown", onKey);
+        render();
+        overlay.querySelector(".cal-day.selected, [data-cal-close]").focus({ preventScroll: true });
+      }
+
+      // ---- 写真: 選んだときだけ読み込み、端末上で縮小・JPEG化する ----
+      function loadImage(file) {
+        return new Promise(function (resolve, reject) {
+          const url = URL.createObjectURL(file);
+          const image = new Image();
+          image.onload = function () {
+            URL.revokeObjectURL(url);
+            resolve(image);
+          };
+          image.onerror = function () {
+            URL.revokeObjectURL(url);
+            reject(new Error("decode_failed"));
+          };
+          image.src = url;
+        });
+      }
+
+      function canvasToJpeg(canvas, quality) {
+        return new Promise(function (resolve, reject) {
+          canvas.toBlob(function (blob) {
+            if (blob) {
+              resolve(blob);
+            } else {
+              reject(new Error("encode_failed"));
+            }
+          }, "image/jpeg", quality);
+        });
+      }
+
+      function blobToBase64(blob) {
+        return new Promise(function (resolve, reject) {
+          const reader = new FileReader();
+          reader.onload = function () {
+            resolve(String(reader.result).split(",")[1] || "");
+          };
+          reader.onerror = function () {
+            reject(new Error("read_failed"));
+          };
+          reader.readAsDataURL(blob);
+        });
+      }
+
+      /*
+       * 長辺1600pxに縮小し、JPEG(品質0.8、3MBを超えたら0.7→0.6)にする。
+       * HEICなども、端末が表示できる形式ならここでJPEGになる。
+       * 描き直すため、撮影位置などのEXIF情報は送らない。
+       */
+      async function compressPhoto(file) {
+        const image = await loadImage(file);
+        const scale = Math.min(1, PHOTO_MAX_EDGE / Math.max(image.naturalWidth, image.naturalHeight));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+        canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+        canvas.getContext("2d").drawImage(image, 0, 0, canvas.width, canvas.height);
+
+        for (const quality of PHOTO_QUALITIES) {
+          const blob = await canvasToJpeg(canvas, quality);
+          if (blob.size <= PHOTO_MAX_BYTES) {
+            return { blob: blob, quality: quality };
+          }
+        }
+        throw new Error("too_large");
+      }
+
+      async function handlePhotoFile(file) {
+        const photoStatus = document.getElementById("photoStatus");
+        showFieldError(photoStatus, "");
+        setPhoto(null);
+        record.photoBusy = true;
+        renderPhoto();
+        updateSaveState();
+        try {
+          const result = await compressPhoto(file);
+          const base64 = await blobToBase64(result.blob);
+          record.photoBusy = false;
+          setPhoto({
+            base64: base64,
+            url: URL.createObjectURL(result.blob),
+            bytes: result.blob.size,
+            quality: result.quality,
+          });
+        } catch (error) {
+          console.error("写真の準備エラー", error);
+          record.photoBusy = false;
+          showFieldError(
+            photoStatus,
+            error.message === "too_large"
+              ? "写真が大きすぎて保存できません。別の写真を選んでください。"
+              : "この写真は読み込めませんでした。別の写真を選んでください。",
+          );
+          renderPhoto();
+          updateSaveState();
+        }
+      }
+
+      // ---- 保存 ----
+      function recordErrorMessage(error) {
+        if (error instanceof ApiError) {
+          if (error.status === 401) {
+            return "LINEの認証が切れました。LINEから開き直してください。";
+          }
+          if (error.status === 403) {
+            return "このアカウントでは利用できません。";
+          }
+          if (error.code === "unknown_location") {
+            return "この場所が見つかりませんでした。場所を選び直してください。";
+          }
+          if (error.code === "photo_too_large" || error.status === 413) {
+            return "写真が大きすぎて保存できませんでした。別の写真を選んでください。";
+          }
+          if (error.code === "invalid_photo") {
+            return "写真を保存できませんでした。別の写真を選んでください。";
+          }
+          if (error.code === "invalid_record" || error.code === "empty_record") {
+            return "入力内容を保存できませんでした。内容を確認してください。";
+          }
+          if (error.code === "storage_not_initialized") {
+            return "保存先が準備されていません。";
+          }
+        }
+        return "保存できませんでした。通信状況を確認して、もう一度保存してください。";
+      }
+
+      function leaveRecord() {
+        setPhoto(null);
+        document.body.classList.remove("recording");
+        showPicker();
+      }
+
+      async function saveRecord() {
+        if (record.saving || record.photoBusy) {
+          return;
+        }
+        // 入力欄に残っている植物も一緒に保存する
+        if (!addTagFromInput()) {
+          setMoreOpen(true);
+          updateSaveState();
+          return;
+        }
+        if (!hasContent()) {
+          updateSaveState();
+          return;
+        }
+        if (!liffReady && previewCount === null) {
+          return;
+        }
+
+        if (!record.pendingRecordId) {
+          record.pendingRecordId = newRecordId();
+        }
+        const body = {
+          recordId: record.pendingRecordId,
+          workDate: record.workDate,
+          locationId: record.location.id,
+          workTypes: WORK_TYPES.filter(function (w) { return record.workTypes.includes(w); }),
+          plantTags: record.tags,
+          memo: memoInput.value,
+        };
+        if (record.photo) {
+          body.photo = { mimeType: "image/jpeg", data: record.photo.base64 };
+        }
+
+        record.saving = true;
+        saveError.classList.add("hidden");
+        updateSaveState();
+        try {
+          await api("POST", "/api/records", body);
+          const placeName = record.location.name;
+          record.pendingRecordId = null;
+          record.saving = false;
+          leaveRecord();
+          showToast("「" + placeName + "」に記録しました");
+        } catch (error) {
+          console.error("記録の保存エラー", error);
+          record.saving = false;
+          saveError.textContent = recordErrorMessage(error);
+          saveError.classList.remove("hidden");
+          updateSaveState();
+        }
+      }
+
+      document.getElementById("workDateButton").addEventListener("click", openCalendar);
+
+      function pickPhoto() {
+        if (!record.saving && !record.photoBusy) {
+          photoInput.click();
+        }
+      }
+
+      document.getElementById("photoButton").addEventListener("click", pickPhoto);
+      document.getElementById("photoImage").addEventListener("click", pickPhoto);
+      document.getElementById("photoChange").addEventListener("click", pickPhoto);
+      document.getElementById("photoRemove").addEventListener("click", function () {
+        if (!record.saving) {
+          setPhoto(null);
+        }
+      });
+      photoInput.addEventListener("change", function () {
+        const file = photoInput.files && photoInput.files[0];
+        photoInput.value = "";
+        if (file) {
+          handlePhotoFile(file);
+        }
+      });
+
+      document.getElementById("moreToggle").addEventListener("click", function () {
+        setMoreOpen(!record.moreOpen);
+      });
+
+      document.getElementById("tagAdd").addEventListener("click", addTagFromInput);
+      tagInput.addEventListener("keydown", function (event) {
+        // 日本語入力の変換確定のEnterでは追加しない
+        if (event.key === "Enter" && !event.isComposing) {
+          event.preventDefault();
+          addTagFromInput();
+        }
+      });
+      tagInput.addEventListener("input", updateSaveState);
+      // 入力欄の枠(:focus-within の代わり)
+      tagInput.addEventListener("focus", function () {
+        document.getElementById("tagField").classList.add("focused");
+      });
+      tagInput.addEventListener("blur", function () {
+        document.getElementById("tagField").classList.remove("focused");
+      });
+
+      memoInput.addEventListener("input", function () {
+        renderMemoCounter();
+        updateSaveState();
+      });
+
+      saveButton.addEventListener("click", saveRecord);
+
+      document.getElementById("changePlace").addEventListener("click", function () {
+        if (record.saving) {
+          return;
+        }
+        if (hasContent() && !window.confirm("入力した内容は保存されません。場所を選び直しますか？")) {
+          return;
+        }
+        leaveRecord();
+      });
 
       async function start() {
         // 前回の一覧があれば、LIFFの準備を待たずにすぐ表示する(最新の一覧は裏で取り直す)

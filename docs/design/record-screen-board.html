@@ -1,0 +1,2091 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>記録画面 検討ボード</title>
+    <link rel="icon" href="data:,">
+    <!--
+      STEP 4-3b 記録画面の検討ボード(検討用。本番・検証用ページには読み込まれない)。
+      ラウンド制: やり取りごとに、いまの内容の下へ新しいラウンドを追加する。過去のラウンドは残す。
+      色・文字・角丸は liff/beta/index.html の既存CSSに合わせている。
+    -->
+    <style>
+      :root {
+        /* liff/beta/index.html と同じ値 */
+        --text: #1f3323;
+        --muted: #5d6b5f;
+        --accent: #4f7956;
+        --bg: #f7faf7;
+        --card: #ffffff;
+        --line: #cdd8cd;
+        --error-bg: #fff0f0;
+        --error-text: #8b1f1f;
+        /* 検討用に足したもの(既存の色から作る) */
+        --faint: #8a968c;
+        --hair: #e3e9e3;
+        --accent-soft: #e6efe5;
+        --accent-ink: #3f6546;
+        --place: #dde3f5; /* 場所IDから決まる色の例(空) */
+        --r-sm: 10px;
+        --r-md: 14px;
+        --r-lg: 20px;
+        --board-bg: #e9ece7;
+        font-family: -apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+        color: var(--text);
+      }
+
+      * { box-sizing: border-box; }
+
+      html, body { margin: 0; height: 100%; }
+
+      body { background: var(--board-bg); overflow: hidden; }
+
+      button, input, textarea { font: inherit; color: inherit; }
+
+      .hidden { display: none !important; }
+
+      /* ---------- ボードの上部バー ---------- */
+      .topbar {
+        position: fixed;
+        inset: 0 0 auto 0;
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        height: 56px;
+        padding: 0 20px;
+        background: #fbfcfa;
+        border-bottom: 1px solid #d9ded6;
+      }
+
+      .topbar h1 { margin: 0; font-size: 16px; }
+
+      .topbar .sub { color: var(--muted); font-size: 13px; }
+
+      .topbar .spacer { flex: 1; }
+
+      .topbar label { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); cursor: pointer; }
+
+      .zoom { display: flex; align-items: center; border: 1px solid #d0d6cd; border-radius: 8px; overflow: hidden; }
+
+      .zoom button { min-width: 38px; height: 32px; border: 0; border-left: 1px solid #d0d6cd; background: #fff; cursor: pointer; font-size: 13px; }
+
+      .zoom button:first-child { border-left: 0; }
+
+      .zoom button:active { background: #eef1ec; }
+
+      /* ---------- ボード本体(ズーム) ---------- */
+      .viewport { position: fixed; inset: 56px 0 0 0; overflow: auto; }
+
+      .board { transform-origin: 0 0; padding: 36px 40px 80px; width: max-content; }
+
+      .round { margin-bottom: 64px; }
+
+      .round-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 6px; }
+
+      .round-head h2 { margin: 0; font-size: 22px; }
+
+      .round-head .date { color: var(--muted); font-size: 13px; }
+
+      .round-desc { margin: 0 0 24px; max-width: 900px; color: var(--muted); font-size: 14px; line-height: 1.7; }
+
+      .options { display: flex; gap: 44px; align-items: flex-start; }
+
+      .option { width: 390px; }
+
+      .option-title { margin: 0 0 4px; font-size: 17px; }
+
+      .option-title span { display: inline-block; min-width: 28px; margin-right: 6px; padding: 2px 8px; border-radius: 6px; background: var(--text); color: #fff; font-size: 13px; text-align: center; }
+
+      .option-lead { margin: 0 0 14px; color: var(--muted); font-size: 13px; line-height: 1.6; }
+
+      .notes { margin-top: 16px; font-size: 13px; line-height: 1.7; }
+
+      .notes h4 { margin: 12px 0 2px; font-size: 13px; }
+
+      .notes ul { margin: 0; padding-left: 18px; }
+
+      /* ---------- 端末枠(LIFFの見た目に近づける) ---------- */
+      .phone {
+        position: relative;
+        width: 390px;
+        height: 800px;
+        border: 10px solid #1d241e;
+        border-radius: 44px;
+        background: #1d241e;
+        overflow: hidden;
+      }
+
+      .liff-bar {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 44px;
+        background: #fff;
+        border-bottom: 1px solid var(--hair);
+        font-size: 14px;
+        font-weight: 700;
+      }
+
+      .screen {
+        position: relative;
+        height: calc(100% - 44px);
+        overflow-y: auto;
+        background: var(--bg);
+        color: var(--text);
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      /* 画面内の保存完了通知 */
+      .toast {
+        position: absolute;
+        left: 50%;
+        bottom: 96px;
+        z-index: 5;
+        max-width: calc(100% - 32px);
+        padding: 12px 16px;
+        border-radius: 12px;
+        background: #2d4a33;
+        color: #fff;
+        font-size: 14px;
+        font-weight: 700;
+        width: max-content;
+        text-align: center;
+        transform: translateX(-50%);
+      }
+
+      /* ---------- 3案で共通の部品 ---------- */
+      .date-input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; border: 0; cursor: pointer; }
+
+      .photo-img { display: block; width: 100%; height: 100%; object-fit: cover; }
+
+      .counter { margin: 4px 0 0; color: var(--faint); font-size: 12px; text-align: right; }
+
+      .counter.over { color: var(--error-text); }
+
+      .field-error { margin: 6px 0 0; color: var(--error-text); font-size: 13px; }
+
+      .save-error { margin: 0 0 8px; padding: 9px 12px; border-radius: var(--r-sm); background: var(--error-bg); color: var(--error-text); font-size: 13px; line-height: 1.5; }
+
+      .btn-primary {
+        border: 0;
+        border-radius: 12px;
+        background: var(--accent);
+        color: #fff;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      .btn-primary:disabled { background: #a9bcab; cursor: default; }
+
+      .btn-primary.saving { background: var(--accent); opacity: .7; cursor: wait; }
+
+      .btn-primary:not(:disabled):active { filter: brightness(.92); }
+
+      .tag { display: inline-flex; align-items: center; padding: 4px 2px 4px 12px; border-radius: 999px; background: var(--accent-soft); font-size: 15px; }
+
+      .tag button { width: 30px; height: 30px; border: 0; background: none; color: var(--muted); font-size: 17px; cursor: pointer; }
+
+      .text-input, .memo {
+        width: 100%;
+        padding: 11px 12px;
+        border: 1px solid var(--line);
+        border-radius: var(--r-sm);
+        background: #fff;
+        font-size: 16px;
+      }
+
+      .memo { min-height: 84px; resize: none; line-height: 1.5; }
+
+      .text-input:focus, .memo:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: var(--accent); }
+
+      /* =========================================================
+         案1 現行を整理(カード1枚・現行の順番のまま、保存ボタンを常に見える位置へ)
+         ========================================================= */
+      .v1 { padding: 16px 14px 0; }
+
+      .v1 .card { padding: 18px 16px 8px; border-radius: var(--r-lg); background: var(--card); box-shadow: 0 4px 16px rgba(0, 0, 0, .06); }
+
+      .v1 .head { display: flex; align-items: center; gap: 10px; }
+
+      .v1 .place { flex: 1; min-width: 0; padding: 10px 14px; border-radius: 12px; background: var(--place); font-size: 20px; font-weight: 700; }
+
+      .v1 .link { flex: none; padding: 8px 2px; border: 0; background: none; color: var(--accent); font-size: 14px; font-weight: 700; cursor: pointer; }
+
+      .v1 .field { padding: 16px 0; border-top: 1px solid var(--hair); }
+
+      .v1 .head + .field { margin-top: 14px; }
+
+      .v1 .label { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; font-weight: 700; font-size: 15px; }
+
+      .v1 .label small { color: var(--faint); font-size: 12px; font-weight: 400; }
+
+      .v1 .date-row { position: relative; display: flex; justify-content: space-between; align-items: center; padding: 11px 14px; border: 1px solid var(--line); border-radius: var(--r-sm); background: #fff; font-size: 16px; }
+
+      .v1 .date-row .act { color: var(--accent); font-size: 14px; font-weight: 700; }
+
+      .v1 .photo-add { width: 100%; height: 52px; border: 2px dashed var(--line); border-radius: var(--r-md); background: #fff; color: var(--accent); font-weight: 700; cursor: pointer; }
+
+      .v1 .photo-box { position: relative; height: 200px; border-radius: 12px; overflow: hidden; }
+
+      .v1 .photo-actions { display: flex; gap: 8px; margin-top: 8px; }
+
+      .v1 .photo-actions button { flex: 1; padding: 10px; border: 1px solid var(--accent); border-radius: var(--r-sm); background: #fff; color: var(--accent-ink); font-weight: 700; cursor: pointer; }
+
+      .v1 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+
+      .v1 .chip { min-height: 42px; padding: 8px 14px; border: 1px solid var(--line); border-radius: 999px; background: #fff; font-size: 15px; cursor: pointer; }
+
+      .v1 .chip[aria-pressed="true"] { border-color: var(--accent); background: var(--accent); color: #fff; font-weight: 700; }
+
+      .v1 .tag-row { display: flex; gap: 8px; }
+
+      .v1 .tag-row .add { flex: none; padding: 0 16px; border: 1px solid var(--accent); border-radius: var(--r-sm); background: #fff; color: var(--accent-ink); font-weight: 700; cursor: pointer; }
+
+      .v1 .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+
+      .v1 .tags:empty { display: none; }
+
+      .v1 .savebar { position: sticky; bottom: 0; margin: 0 -14px; padding: 12px 14px 16px; background: linear-gradient(rgba(247, 250, 247, 0), var(--bg) 30%); }
+
+      .v1 .save { width: 100%; height: 52px; font-size: 17px; }
+
+      .v1 .hint { margin: 6px 0 0; color: var(--muted); font-size: 12px; text-align: center; }
+
+      /* =========================================================
+         案2 入力速度優先(よく触る作業内容を最上部・格子状に固定、日付は見出しへ)
+         ========================================================= */
+      .v2 { display: flex; flex-direction: column; }
+
+      .v2 .head { padding: 14px 16px 12px; background: var(--place); }
+
+      .v2 .head-top { display: flex; justify-content: space-between; align-items: center; }
+
+      .v2 .place { font-size: 21px; font-weight: 700; }
+
+      .v2 .link { padding: 6px 0; border: 0; background: none; color: var(--accent-ink); font-size: 13px; font-weight: 700; cursor: pointer; }
+
+      .v2 .date-chip { position: relative; display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; padding: 6px 12px; border-radius: 999px; background: rgba(255, 255, 255, .75); font-size: 14px; }
+
+      .v2 .date-chip .act { color: var(--accent); font-size: 12px; font-weight: 700; }
+
+      .v2 .body { flex: 1; padding: 4px 16px 0; }
+
+      .v2 .sec { padding: 14px 0; }
+
+      .v2 .sec + .sec { border-top: 1px solid var(--hair); }
+
+      .v2 .label { margin-bottom: 8px; color: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: .06em; }
+
+      /* 9項目を3列の格子に固定し、いつも同じ位置で押せるようにする */
+      .v2 .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+
+      .v2 .cell { height: 50px; border: 1px solid var(--line); border-radius: 12px; background: #fff; font-size: 15px; cursor: pointer; }
+
+      .v2 .cell[aria-pressed="true"] { border-color: var(--accent); background: var(--accent); color: #fff; font-weight: 700; }
+
+      .v2 .photo-row { display: flex; gap: 12px; align-items: center; }
+
+      .v2 .photo-tile { position: relative; flex: none; width: 92px; height: 92px; border: 2px dashed var(--line); border-radius: var(--r-md); background: #fff; color: var(--accent); cursor: pointer; overflow: hidden; }
+
+      .v2 .photo-tile.has { border-style: solid; border-color: transparent; }
+
+      .v2 .photo-tile svg { display: block; margin: 0 auto 4px; }
+
+      .v2 .photo-tile .t { font-size: 12px; font-weight: 700; }
+
+      .v2 .photo-side { color: var(--muted); font-size: 13px; line-height: 1.6; }
+
+      .v2 .photo-side button { margin-top: 4px; padding: 6px 0; border: 0; background: none; color: var(--error-text); font-size: 13px; font-weight: 700; cursor: pointer; }
+
+      .v2 .tag-field { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 8px; border: 1px solid var(--line); border-radius: var(--r-sm); background: #fff; }
+
+      .v2 .tag-field input { flex: 1; min-width: 120px; padding: 6px 4px; border: 0; background: none; font-size: 16px; outline: none; }
+
+      .v2 .tag-field .add { padding: 6px 10px; border: 0; border-radius: 8px; background: var(--accent-soft); color: var(--accent-ink); font-size: 14px; font-weight: 700; cursor: pointer; }
+
+      .v2 .memo { min-height: 64px; }
+
+      .v2 .savebar { position: sticky; bottom: 0; padding: 10px 16px 14px; background: #fff; border-top: 1px solid var(--hair); }
+
+      .v2 .save-row { display: flex; align-items: center; gap: 12px; }
+
+      .v2 .summary { flex: 1; min-width: 0; color: var(--muted); font-size: 13px; line-height: 1.4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+      .v2 .summary b { color: var(--text); }
+
+      .v2 .save { flex: none; width: 132px; height: 48px; font-size: 16px; }
+
+      /* =========================================================
+         案3 写真を主役に、詳しい入力は折りたたむ(「撮る→押す→保存」の3動作)
+         ========================================================= */
+      .v3 { display: flex; flex-direction: column; }
+
+      /* 内容が長くなっても写真枠などを縮めない */
+      .v3 > *, .v2 > * { flex-shrink: 0; }
+
+      .v3 .head { display: flex; align-items: flex-end; justify-content: space-between; padding: 16px 16px 12px; }
+
+      .v3 .place-block { min-width: 0; }
+
+      .v3 .place { display: inline-block; padding: 4px 10px; border-radius: 8px; background: var(--place); font-size: 22px; font-weight: 800; }
+
+      .v3 .date-line { position: relative; display: inline-flex; align-items: center; gap: 6px; margin-top: 6px; color: var(--muted); font-size: 14px; }
+
+      .v3 .date-line .act { color: var(--accent); font-size: 12px; font-weight: 700; }
+
+      .v3 .link { padding: 6px 0; border: 0; background: none; color: var(--accent); font-size: 13px; font-weight: 700; cursor: pointer; }
+
+      .v3 .photo-stage { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; width: calc(100% - 32px); aspect-ratio: 4 / 3; margin: 0 16px; border: 0; border-radius: 18px; background: #e7ede6; color: var(--accent-ink); cursor: pointer; overflow: hidden; }
+
+      .v3 .photo-stage .t { font-size: 16px; font-weight: 700; }
+
+      .v3 .photo-stage .s { color: var(--muted); font-size: 12px; }
+
+      .v3 .photo-over { position: absolute; right: 10px; bottom: 10px; display: flex; gap: 6px; }
+
+      .v3 .photo-over button { padding: 7px 12px; border: 0; border-radius: 999px; background: rgba(29, 36, 30, .72); color: #fff; font-size: 13px; font-weight: 700; cursor: pointer; }
+
+      .v3 .body { flex: 1; padding: 16px 16px 0; }
+
+      .v3 .label { margin-bottom: 8px; font-size: 14px; font-weight: 700; }
+
+      .v3 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+
+      .v3 .chip { min-height: 40px; padding: 7px 13px; border: 0; border-radius: 999px; background: #eaefe9; font-size: 15px; cursor: pointer; }
+
+      .v3 .chip[aria-pressed="true"] { background: var(--accent); color: #fff; font-weight: 700; }
+
+      .v3 .more-toggle { display: flex; justify-content: space-between; align-items: center; width: 100%; margin-top: 18px; padding: 13px 14px; border: 1px solid var(--line); border-radius: 12px; background: #fff; font-size: 15px; font-weight: 700; cursor: pointer; }
+
+      .v3 .more-toggle .meta { color: var(--muted); font-size: 13px; font-weight: 400; }
+
+      .v3 .more { padding: 14px 2px 0; }
+
+      .v3 .more .label { margin-top: 4px; }
+
+      .v3 .tag-row { display: flex; gap: 8px; }
+
+      .v3 .tag-row .add { flex: none; padding: 0 14px; border: 1px solid var(--accent); border-radius: var(--r-sm); background: #fff; color: var(--accent-ink); font-weight: 700; cursor: pointer; }
+
+      .v3 .tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 14px; }
+
+      .v3 .tags:empty { margin: 0 0 14px; }
+
+      .v3 .savebar { position: sticky; bottom: 0; padding: 12px 16px 16px; background: linear-gradient(rgba(247, 250, 247, 0), var(--bg) 30%); }
+
+      .v3 .save { width: 100%; height: 56px; border-radius: 16px; font-size: 18px; }
+
+      .v3 .hint { margin: 6px 0 0; color: var(--muted); font-size: 12px; text-align: center; }
+
+      /* =========================================================
+         Round 2: 案2の地(見出し・3列格子・要約付きの保存欄)に、案3の写真枠と折りたたみ
+         ========================================================= */
+      .r2 { display: flex; flex-direction: column; }
+
+      .r2 > * { flex-shrink: 0; }
+
+      .r2 .head { padding: 14px 16px 12px; background: var(--place); }
+
+      .r2 .head-top { display: flex; justify-content: space-between; align-items: center; }
+
+      .r2 .place { font-size: 21px; font-weight: 700; }
+
+      .r2 .link { padding: 6px 0; border: 0; background: none; color: var(--accent-ink); font-size: 13px; font-weight: 700; cursor: pointer; }
+
+      .r2 .date-chip { position: relative; display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; padding: 6px 12px; border-radius: 999px; background: rgba(255, 255, 255, .75); font-size: 14px; }
+
+      .r2 .date-chip .act { color: var(--accent); font-size: 12px; font-weight: 700; }
+
+      .r2 .body { flex: 1; padding: 14px 16px 0; }
+
+      .r2 .photo-stage { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; width: 100%; aspect-ratio: 4 / 3; border: 0; border-radius: 16px; background: #e7ede6; color: var(--accent-ink); cursor: pointer; overflow: hidden; }
+
+      .r2 .photo-stage .t { font-size: 16px; font-weight: 700; }
+
+      .r2 .photo-stage .s { color: var(--muted); font-size: 12px; }
+
+      .r2 .photo-over { position: absolute; right: 10px; bottom: 10px; display: flex; gap: 6px; }
+
+      .r2 .photo-over button { padding: 7px 12px; border: 0; border-radius: 999px; background: rgba(29, 36, 30, .72); color: #fff; font-size: 13px; font-weight: 700; cursor: pointer; }
+
+      .r2 .label { margin: 16px 0 8px; color: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: .06em; }
+
+      .r2 .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+
+      .r2 .cell { height: 50px; border: 1px solid var(--line); border-radius: 12px; background: #fff; font-size: 15px; cursor: pointer; }
+
+      .r2 .cell[aria-pressed="true"] { border-color: var(--accent); background: var(--accent); color: #fff; font-weight: 700; }
+
+      .r2 .more-toggle { display: flex; justify-content: space-between; align-items: center; width: 100%; margin: 16px 0 0; padding: 13px 14px; border: 1px solid var(--line); border-radius: 12px; background: #fff; font-size: 15px; font-weight: 700; cursor: pointer; }
+
+      .r2 .more-toggle .meta { color: var(--muted); font-size: 13px; font-weight: 400; }
+
+      .r2 .more { padding: 2px 0 8px; }
+
+      .r2 .tag-field { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 8px; border: 1px solid var(--line); border-radius: var(--r-sm); background: #fff; }
+
+      .r2 .tag-field input { flex: 1; min-width: 120px; padding: 6px 4px; border: 0; background: none; font-size: 16px; outline: none; }
+
+      .r2 .tag-field .add { padding: 6px 10px; border: 0; border-radius: 8px; background: var(--accent-soft); color: var(--accent-ink); font-size: 14px; font-weight: 700; cursor: pointer; }
+
+      .r2 .savebar { position: sticky; bottom: 0; margin-top: 16px; padding: 10px 16px 14px; background: #fff; border-top: 1px solid var(--hair); }
+
+      .r2 .save-row { display: flex; align-items: center; gap: 12px; }
+
+      .r2 .summary { flex: 1; min-width: 0; color: var(--muted); font-size: 13px; line-height: 1.4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+      .r2 .summary b { color: var(--text); }
+
+      .r2 .save { flex: none; width: 132px; height: 48px; font-size: 16px; }
+
+      /* =========================================================
+         Round 3: 場所の色(タイルの色相)の濃淡で記録画面全体を統一。全体を明るいペールトーンに。
+         色は画面ごとに --c-* で渡す(場所ごとに1組。下の .tone-sora / .tone-wakaba)。
+         白文字を載せる濃い色は、白との明るさの差(コントラスト比)4.5以上にしている。
+         ========================================================= */
+      .tone-sora {
+        /* 空(#dde3f5 の色相 約226°) */
+        --c-bg: #f7f9fe;      /* 画面の地 */
+        --c-band: #e6ecfa;    /* 場所帯(タイルの色より少し明るく) */
+        --c-frame: #eef2fc;   /* 写真枠・植物タグ */
+        --c-inner: #f1f4fd;   /* 折りたたみを開いた内側 */
+        --c-line: #d3dbf2;    /* 枠線 */
+        --c-chip: #5a6eb2;    /* 選択中の作業チップ(白文字 約5.0:1) */
+        --c-strong: #3f5396;  /* 保存・変更ボタン(最も濃い。白文字 約7.4:1) */
+        --c-ink: #2f3f75;     /* 場所名・写真枠の文字 */
+        --c-disabled: #b9c4e6;
+      }
+
+      .tone-wakaba {
+        /* 若葉(#e3ecd6 の色相 約86°) */
+        --c-bg: #f9fbf5;
+        --c-band: #ebf2e1;
+        --c-frame: #f0f5e9;
+        --c-inner: #f3f7ed;
+        --c-line: #d6e2c6;
+        --c-chip: #5c7a3c;
+        --c-strong: #46632a;
+        --c-ink: #34491f;
+        --c-disabled: #bccca6;
+      }
+
+      .r3 { display: flex; flex-direction: column; background: var(--c-bg); color: #26303a; }
+
+      .r3 > * { flex-shrink: 0; }
+
+      .r3 .head { padding: 12px 16px; background: var(--c-band); }
+
+      .r3 .head-top { display: flex; justify-content: space-between; align-items: center; }
+
+      .r3 .place { color: var(--c-ink); font-size: 21px; font-weight: 700; }
+
+      .r3 .link { padding: 6px 0; border: 0; background: none; color: var(--c-strong); font-size: 13px; font-weight: 700; cursor: pointer; }
+
+      /* 作業日: 横長の枠。左に日付、右に塗りつぶしの「変更」。枠のどこを押しても日付選択が開く */
+      .r3 .date-box {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-top: 8px;
+        padding: 6px 6px 6px 14px;
+        border: 1px solid var(--c-line);
+        border-radius: 12px;
+        background: #fff;
+        cursor: pointer;
+      }
+
+      .r3 .date-box .date-label { color: #5f6873; font-size: 13px; font-weight: 700; margin-right: 8px; }
+
+      .r3 .date-box .date-value { font-size: 16px; font-weight: 700; }
+
+      .r3 .date-box .change {
+        flex: none;
+        padding: 9px 16px;
+        border-radius: 9px;
+        background: var(--c-strong);
+        color: #fff;
+        font-size: 14px;
+        font-weight: 700;
+      }
+
+      .r3 .date-box:active .change { filter: brightness(.9); }
+
+      .r3 .body { flex: 1; padding: 12px 16px 0; }
+
+      .r3 .photo-stage { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; width: 100%; aspect-ratio: 4 / 3; border: 1.5px dashed var(--c-line); border-radius: 16px; background: var(--c-frame); color: var(--c-ink); cursor: pointer; overflow: hidden; }
+
+      .r3 .photo-stage:has(img:not(.hidden)) { border-style: solid; border-color: transparent; }
+
+      .r3 .photo-stage .t { font-size: 16px; font-weight: 700; }
+
+      .r3 .photo-stage .s { color: #5f6873; font-size: 12px; }
+
+      .r3 .photo-over { position: absolute; right: 10px; bottom: 10px; display: flex; gap: 6px; }
+
+      .r3 .photo-over button { padding: 7px 12px; border: 0; border-radius: 999px; background: rgba(38, 48, 58, .72); color: #fff; font-size: 13px; font-weight: 700; cursor: pointer; }
+
+      .r3 .label { margin: 14px 0 8px; color: #5f6873; font-size: 12px; font-weight: 700; letter-spacing: .06em; }
+
+      .r3 .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+
+      .r3 .cell { height: 50px; border: 1px solid var(--c-line); border-radius: 12px; background: #fff; color: #26303a; font-size: 15px; cursor: pointer; }
+
+      .r3 .cell[aria-pressed="true"] { border-color: var(--c-chip); background: var(--c-chip); color: #fff; font-weight: 700; }
+
+      .r3 .fold { margin-top: 14px; border: 1px solid var(--c-line); border-radius: 12px; background: #fff; overflow: hidden; }
+
+      .r3 .fold:has(.more:not(.hidden)) { background: var(--c-inner); }
+
+      .r3 .more-toggle { display: flex; justify-content: space-between; align-items: center; width: 100%; padding: 13px 14px; border: 0; background: none; color: #26303a; font-size: 15px; font-weight: 700; cursor: pointer; }
+
+      .r3 .more-toggle .meta { color: var(--c-strong); font-size: 13px; font-weight: 700; }
+
+      .r3 .more { padding: 0 14px 12px; }
+
+      .r3 .more .label:first-child { margin-top: 2px; }
+
+      .r3 .tag-field { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 8px; border: 1px solid var(--c-line); border-radius: var(--r-sm); background: #fff; }
+
+      .r3 .tag-field input { flex: 1; min-width: 120px; padding: 6px 4px; border: 0; background: none; font-size: 16px; outline: none; }
+
+      .r3 .tag-field .add { padding: 6px 12px; border: 0; border-radius: 8px; background: var(--c-frame); color: var(--c-strong); font-size: 14px; font-weight: 700; cursor: pointer; }
+
+      .r3 .tag { background: var(--c-band); color: var(--c-ink); }
+
+      .r3 .memo { border-color: var(--c-line); }
+
+      .r3 .memo:focus, .r3 .tag-field:focus-within { outline: 2px solid var(--c-strong); outline-offset: -1px; }
+
+      .r3 .savebar { position: sticky; bottom: 0; margin-top: 16px; padding: 10px 16px 14px; background: #fff; border-top: 1px solid var(--c-line); }
+
+      .r3 .save-row { display: flex; align-items: center; gap: 12px; }
+
+      .r3 .summary { flex: 1; min-width: 0; color: #5f6873; font-size: 13px; line-height: 1.4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+      .r3 .summary b { color: #26303a; }
+
+      .r3 .save { flex: none; width: 132px; height: 48px; background: var(--c-strong); font-size: 16px; }
+
+      .r3 .save:disabled { background: var(--c-disabled); }
+
+      .r3 .save.saving { background: var(--c-strong); }
+
+      .r3 .toast { background: var(--c-ink); }
+
+      /* =========================================================
+         Round 4: 作業日の枠全体を1つのボタンにし、画面内のカレンダー(下から出るシート)で選ぶ
+         ========================================================= */
+      .r3 button.date-box { width: 100%; color: inherit; font: inherit; text-align: left; }
+
+      .r3 button.date-box:focus-visible { outline: 3px solid var(--c-strong); outline-offset: 2px; }
+
+      .cal-overlay {
+        position: absolute;
+        inset: 44px 0 0 0; /* LIFFの見出しの下を全部覆う */
+        z-index: 20;
+        display: flex;
+        align-items: flex-end;
+        background: rgba(20, 28, 40, .4);
+        color: #26303a;
+      }
+
+      .cal-sheet {
+        width: 100%;
+        max-height: 100%;
+        overflow-y: auto;
+        padding: 12px 16px 18px;
+        border-radius: 20px 20px 0 0;
+        background: #fff;
+      }
+
+      .cal-top { display: flex; align-items: center; justify-content: space-between; }
+
+      .cal-title { margin: 0; font-size: 17px; font-weight: 700; }
+
+      .cal-close { display: inline-flex; align-items: center; gap: 4px; min-height: 40px; padding: 0 10px; border: 0; border-radius: 10px; background: #f0f2f5; color: #3a4450; font-size: 14px; font-weight: 700; cursor: pointer; }
+
+      .cal-close span { font-size: 18px; line-height: 1; }
+
+      .cal-picked { margin: 8px 0 10px; padding: 10px 12px; border-radius: 12px; background: var(--c-frame); font-size: 14px; color: #5f6873; }
+
+      .cal-picked b { margin-left: 6px; color: var(--c-ink); font-size: 20px; }
+
+      .cal-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+
+      .cal-nav .month { font-size: 18px; font-weight: 700; }
+
+      .cal-nav button { width: 44px; height: 44px; border: 1px solid var(--c-line); border-radius: 12px; background: #fff; color: var(--c-strong); font-size: 20px; font-weight: 700; cursor: pointer; }
+
+      .cal-nav button:disabled { border-color: #eceff2; color: #c5cad1; cursor: default; }
+
+      .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+
+      .cal-week { padding: 4px 0; color: #6b7480; font-size: 12px; font-weight: 700; text-align: center; }
+
+      .cal-week.sun { color: #b0464a; }
+
+      .cal-week.sat { color: #3c5ea3; }
+
+      .cal-day {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        aspect-ratio: 1;
+        border: 0;
+        border-radius: 12px;
+        background: none;
+        color: #26303a;
+        font-size: 17px;
+        cursor: pointer;
+      }
+
+      .cal-day.sun { color: #b0464a; }
+
+      .cal-day.sat { color: #3c5ea3; }
+
+      .cal-day:not(:disabled):active { background: var(--c-frame); }
+
+      /* 今日: 枠線と「今日」の小さな文字 */
+      .cal-day.today { box-shadow: inset 0 0 0 2px var(--c-chip); font-weight: 700; }
+
+      .cal-day .today-mark { font-size: 10px; font-weight: 700; line-height: 1; color: var(--c-chip); }
+
+      /* 選んでいる日: 最も濃い場所色で塗りつぶし */
+      .cal-day.selected { background: var(--c-strong); color: #fff; font-weight: 700; box-shadow: none; }
+
+      .cal-day.selected .today-mark { color: #fff; }
+
+      /* 未来の日は選べない */
+      .cal-day:disabled { color: #c5cad1; cursor: default; }
+
+      .cal-legend { display: flex; gap: 14px; margin: 8px 2px 0; color: #6b7480; font-size: 12px; }
+
+      .cal-legend i { display: inline-block; width: 12px; height: 12px; margin-right: 4px; border-radius: 4px; vertical-align: -1px; }
+
+      .cal-legend .l-today { box-shadow: inset 0 0 0 2px var(--c-chip); }
+
+      .cal-legend .l-selected { background: var(--c-strong); }
+
+      .cal-actions { display: flex; gap: 10px; margin-top: 14px; }
+
+      .cal-actions button { flex: 1; height: 50px; border-radius: 12px; font-size: 16px; font-weight: 700; cursor: pointer; }
+
+      .cal-actions .cancel { border: 1px solid #cfd5dc; background: #fff; color: #3a4450; }
+
+      .cal-actions .ok { border: 0; background: var(--c-strong); color: #fff; }
+
+      .cal-today-link { margin-top: 10px; padding: 6px 0; border: 0; background: none; color: var(--c-strong); font-size: 14px; font-weight: 700; cursor: pointer; }
+
+      /* =========================================================
+         Round 5: 長い場所名への対応と、8色の濃淡セット(色は JS の TONES から画面ごとに設定)
+         ========================================================= */
+      /* 「場所を変える」は1行固定。場所名は2行まで、長さに応じて文字を小さくする */
+      .r5 .head-top { align-items: flex-start; gap: 10px; }
+
+      .r5 .place {
+        flex: 1;
+        min-width: 0;
+        display: -webkit-box;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+        overflow: hidden;
+        line-height: 1.3;
+        overflow-wrap: anywhere;
+      }
+
+      .r5 .place.size-m { font-size: 18px; }
+
+      .r5 .place.size-s { font-size: 16px; }
+
+      .r5 .link { flex: none; white-space: nowrap; padding-top: 3px; }
+
+      .subhead { margin: 30px 0 6px; font-size: 16px; }
+
+      .subhead:first-of-type { margin-top: 0; }
+
+      /* 8色の見本カード */
+      .tone-cards { display: grid; grid-template-columns: repeat(4, 330px); gap: 22px; }
+
+      .tone-card { border-radius: 16px; background: var(--c-bg); color: #26303a; overflow: hidden; border: 1px solid #d9ded6; }
+
+      .tone-card .tc-band { padding: 10px 12px; background: var(--c-band); }
+
+      .tone-card .tc-name { display: flex; justify-content: space-between; align-items: center; color: var(--c-ink); font-size: 18px; font-weight: 700; }
+
+      .tone-card .tc-name small { color: var(--c-strong); font-size: 12px; }
+
+      .tone-card .tc-date { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; padding: 4px 4px 4px 10px; border: 1px solid var(--c-line); border-radius: 10px; background: #fff; font-size: 13px; font-weight: 700; }
+
+      .tone-card .tc-date span:last-child { padding: 6px 12px; border-radius: 8px; background: var(--c-strong); color: #fff; }
+
+      .tone-card .tc-body { padding: 10px 12px 12px; }
+
+      .tone-card .tc-photo { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 64px; border: 1.5px dashed var(--c-line); border-radius: 12px; background: var(--c-frame); color: var(--c-ink); font-size: 13px; font-weight: 700; }
+
+      .tone-card .tc-photo small { color: #5f6873; font-size: 11px; font-weight: 400; }
+
+      .tone-card .tc-chips { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 8px; }
+
+      .tone-card .tc-chips span { display: flex; align-items: center; justify-content: center; height: 38px; border: 1px solid var(--c-line); border-radius: 10px; background: #fff; font-size: 14px; }
+
+      .tone-card .tc-chips .on { border-color: var(--c-chip); background: var(--c-chip); color: #fff; font-weight: 700; }
+
+      .tone-card .tc-fold { margin-top: 8px; padding: 8px 10px; border: 1px solid var(--c-line); border-radius: 10px; background: var(--c-inner); }
+
+      .tone-card .tc-fold .h { display: flex; justify-content: space-between; font-size: 13px; font-weight: 700; }
+
+      .tone-card .tc-fold .h span:last-child { color: var(--c-strong); }
+
+      .tone-card .tc-fold .row { display: flex; align-items: center; gap: 6px; margin-top: 6px; padding: 4px 6px; border: 1px solid var(--c-line); border-radius: 8px; background: #fff; font-size: 13px; }
+
+      .tone-card .tc-fold .tagp { padding: 3px 10px; border-radius: 999px; background: var(--c-band); color: var(--c-ink); }
+
+      .tone-card .tc-fold .addp { margin-left: auto; padding: 3px 8px; border-radius: 6px; background: var(--c-frame); color: var(--c-strong); font-weight: 700; }
+
+      .tone-card .tc-save { display: flex; gap: 6px; margin-top: 10px; }
+
+      .tone-card .tc-save span { flex: 1; display: flex; align-items: center; justify-content: center; height: 40px; border-radius: 10px; background: var(--c-strong); color: #fff; font-size: 14px; font-weight: 700; }
+
+      .tone-card .tc-save span.off { background: var(--c-disabled); }
+
+      .tone-card table { width: 100%; margin-top: 10px; border-collapse: collapse; font-size: 11.5px; }
+
+      .tone-card td { padding: 3px 0; border-top: 1px solid rgba(0, 0, 0, .06); }
+
+      .tone-card td:nth-child(2) { font-variant-numeric: tabular-nums; text-align: right; }
+
+      .tone-card td:last-child { width: 26px; text-align: right; font-weight: 700; }
+
+      .tone-card .ok { color: #2f6b3a; }
+
+      .tone-card .ng { color: #a3262b; }
+
+      .tone-card .codes { margin-top: 8px; color: #6b7480; font-size: 11px; line-height: 1.6; font-family: ui-monospace, Consolas, monospace; }
+    </style>
+  </head>
+  <body>
+    <div class="topbar">
+      <h1>記録画面 検討ボード</h1>
+      <span class="sub">STEP 4-3b ／ 検討用（本番・検証用ページには未反映）</span>
+      <span class="spacer"></span>
+      <label><input id="failOnce" type="checkbox"> 最初の保存を失敗させる</label>
+      <div class="zoom">
+        <button id="zoomOut" type="button" aria-label="縮小">−</button>
+        <button id="zoomReset" type="button">100%</button>
+        <button id="zoomIn" type="button" aria-label="拡大">＋</button>
+        <button id="zoomFit" type="button">フィット</button>
+      </div>
+    </div>
+
+    <div id="viewport" class="viewport">
+      <div id="board" class="board">
+        <!-- ===================== Round 1 ===================== -->
+        <section class="round">
+          <div class="round-head">
+            <h2>Round 1</h2>
+            <span class="date">2026-09-27</span>
+          </div>
+          <p class="round-desc">
+            必須の項目（場所・作業日・写真・作業内容・植物・メモ・保存）と動きは3案とも同じ。違うのは並び順・見せ方・目立たせ方だけ。
+            各画面は実際に操作できる（写真はタップでサンプル写真が入る。上の「最初の保存を失敗させる」で「もう一度保存」の見え方も確かめられる）。
+          </p>
+
+          <div class="options">
+            <!-- ---------- 案1 ---------- -->
+            <article class="option">
+              <h3 class="option-title"><span>1</span>現行を整理</h3>
+              <p class="option-lead">今の検証用ページの見た目と順番を保ち、区切りと保存ボタンの位置だけ整えた案。</p>
+              <div class="phone">
+                <div class="liff-bar">そだログ（検証用）</div>
+                <div class="screen v1" data-screen>
+                  <div class="card">
+                    <div class="head">
+                      <div class="place">北側の花壇</div>
+                      <button class="link" type="button" data-change-place>場所を変える</button>
+                    </div>
+                    <div class="field">
+                      <div class="label">作業日</div>
+                      <label class="date-row">
+                        <span data-date-text></span>
+                        <span class="act">変更</span>
+                        <input class="date-input" type="date" data-date-input aria-label="作業日">
+                      </label>
+                    </div>
+                    <div class="field">
+                      <div class="label">写真 <small>1枚まで</small></div>
+                      <button class="photo-add" type="button" data-photo-add>＋ 写真を追加</button>
+                      <div class="hidden" data-photo-has>
+                        <div class="photo-box"><img class="photo-img" data-photo-img alt="選んだ写真"></div>
+                        <div class="photo-actions">
+                          <button type="button" data-photo-add>写真を変える</button>
+                          <button type="button" data-photo-remove>写真を外す</button>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="field">
+                      <div class="label">作業内容 <small>いくつでも</small></div>
+                      <div class="chips" data-chips data-chip-class="chip"></div>
+                    </div>
+                    <div class="field">
+                      <div class="label">植物 <small>任意・10個まで</small></div>
+                      <div class="tag-row">
+                        <input class="text-input" type="text" data-tag-input placeholder="例：アジサイ" enterkeyhint="done">
+                        <button class="add" type="button" data-tag-add>追加</button>
+                      </div>
+                      <p class="field-error hidden" data-tag-error></p>
+                      <div class="tags" data-tags></div>
+                    </div>
+                    <div class="field">
+                      <div class="label">メモ</div>
+                      <textarea class="memo" data-memo placeholder="気づいたことなど"></textarea>
+                      <p class="counter" data-counter></p>
+                    </div>
+                  </div>
+                  <div class="savebar">
+                    <p class="save-error hidden" data-save-error></p>
+                    <button class="btn-primary save" type="button" data-save>保存する</button>
+                    <p class="hint" data-hint>写真・作業内容・植物・メモのどれか1つで保存できます</p>
+                  </div>
+                  <div class="toast hidden" data-toast></div>
+                </div>
+              </div>
+              <div class="notes">
+                <h4>変えた点</h4>
+                <ul>
+                  <li>保存ボタンを画面下に固定（今は一番下までスクロールが必要）</li>
+                  <li>項目の間を枠ではなく細い線で区切り、縦の長さを少し短く</li>
+                </ul>
+                <h4>気になる点</h4>
+                <ul>
+                  <li>作業内容まで写真の分だけ下がる。よく使う作業チップが画面の中ほどになる</li>
+                </ul>
+              </div>
+            </article>
+
+            <!-- ---------- 案2 ---------- -->
+            <article class="option">
+              <h3 class="option-title"><span>2</span>入力速度優先</h3>
+              <p class="option-lead">いちばん押す作業内容を最上部に、9項目を3列の格子で固定。作業日は見出しに寄せ、保存欄に入力内容の要約を出す案。</p>
+              <div class="phone">
+                <div class="liff-bar">そだログ（検証用）</div>
+                <div class="screen v2" data-screen>
+                  <div class="head">
+                    <div class="head-top">
+                      <div class="place">北側の花壇</div>
+                      <button class="link" type="button" data-change-place>場所を変える</button>
+                    </div>
+                    <label class="date-chip">
+                      作業日 <span data-date-text></span>
+                      <span class="act">変更</span>
+                      <input class="date-input" type="date" data-date-input aria-label="作業日">
+                    </label>
+                  </div>
+                  <div class="body">
+                    <div class="sec">
+                      <div class="label">作業内容</div>
+                      <div class="grid" data-chips data-chip-class="cell"></div>
+                    </div>
+                    <div class="sec">
+                      <div class="label">写真</div>
+                      <div class="photo-row">
+                        <button class="photo-tile" type="button" data-photo-add data-photo-tile>
+                          <span data-photo-empty>
+                            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 8h3l2-2h6l2 2h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>
+                            <span class="t">追加</span>
+                          </span>
+                          <img class="photo-img hidden" data-photo-img alt="選んだ写真">
+                        </button>
+                        <div class="photo-side">
+                          <span data-photo-caption>1枚まで。撮影またはライブラリから</span>
+                          <br><button class="hidden" type="button" data-photo-remove>写真を外す</button>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="sec">
+                      <div class="label">植物</div>
+                      <div class="tag-field">
+                        <span data-tags style="display: contents"></span>
+                        <input type="text" data-tag-input placeholder="例：アジサイ" enterkeyhint="done">
+                        <button class="add" type="button" data-tag-add>追加</button>
+                      </div>
+                      <p class="field-error hidden" data-tag-error></p>
+                    </div>
+                    <div class="sec">
+                      <div class="label">メモ</div>
+                      <textarea class="memo" data-memo placeholder="気づいたことなど"></textarea>
+                      <p class="counter" data-counter></p>
+                    </div>
+                  </div>
+                  <div class="savebar">
+                    <p class="save-error hidden" data-save-error></p>
+                    <div class="save-row">
+                      <div class="summary" data-summary></div>
+                      <button class="btn-primary save" type="button" data-save>保存する</button>
+                    </div>
+                  </div>
+                  <div class="toast hidden" data-toast></div>
+                </div>
+              </div>
+              <div class="notes">
+                <h4>変えた点</h4>
+                <ul>
+                  <li>作業内容を最上部に。3列×3行の格子で、項目の位置がいつも同じ</li>
+                  <li>作業日は初期値の「今日」をほぼ変えない前提で、見出しの中の小さな表示に</li>
+                  <li>写真は小さな正方形。選ぶとその場でサムネイルに</li>
+                  <li>保存欄に「水やり・写真1枚」のような要約。押す前に中身を確かめられる</li>
+                </ul>
+                <h4>気になる点</h4>
+                <ul>
+                  <li>写真のサムネイルが小さく、写りを確かめにくい</li>
+                  <li>作業日を変えたいときに気づきにくい可能性</li>
+                </ul>
+              </div>
+            </article>
+
+            <!-- ---------- 案3 ---------- -->
+            <article class="option">
+              <h3 class="option-title"><span>3</span>写真を主役に・詳細は折りたたみ</h3>
+              <p class="option-lead">庭では「撮る→作業を押す→保存」が多い前提で、写真を大きく最上部に。植物とメモは「詳しく書く」の中へ畳み、最初の画面を短くする案。</p>
+              <div class="phone">
+                <div class="liff-bar">そだログ（検証用）</div>
+                <div class="screen v3" data-screen>
+                  <div class="head">
+                    <div class="place-block">
+                      <div class="place">北側の花壇</div>
+                      <div>
+                        <label class="date-line">
+                          <span data-date-text></span>
+                          <span class="act">変更</span>
+                          <input class="date-input" type="date" data-date-input aria-label="作業日">
+                        </label>
+                      </div>
+                    </div>
+                    <button class="link" type="button" data-change-place>場所を変える</button>
+                  </div>
+                  <button class="photo-stage" type="button" data-photo-add data-photo-stage>
+                    <span data-photo-empty style="display: contents">
+                      <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 8h3l2-2h6l2 2h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>
+                      <span class="t">写真を撮る・選ぶ</span>
+                      <span class="s">なくても保存できます</span>
+                    </span>
+                    <img class="photo-img hidden" data-photo-img alt="選んだ写真" style="position: absolute; inset: 0">
+                  </button>
+                  <div class="body">
+                    <div class="label">作業内容</div>
+                    <div class="chips" data-chips data-chip-class="chip"></div>
+                    <button class="more-toggle" type="button" data-more-toggle aria-expanded="false">
+                      <span>植物・メモを書く</span>
+                      <span class="meta" data-more-meta>＋</span>
+                    </button>
+                    <div class="more hidden" data-more>
+                      <div class="label">植物</div>
+                      <div class="tag-row">
+                        <input class="text-input" type="text" data-tag-input placeholder="例：アジサイ" enterkeyhint="done">
+                        <button class="add" type="button" data-tag-add>追加</button>
+                      </div>
+                      <p class="field-error hidden" data-tag-error></p>
+                      <div class="tags" data-tags></div>
+                      <div class="label">メモ</div>
+                      <textarea class="memo" data-memo placeholder="気づいたことなど"></textarea>
+                      <p class="counter" data-counter></p>
+                    </div>
+                  </div>
+                  <div class="savebar">
+                    <p class="save-error hidden" data-save-error></p>
+                    <button class="btn-primary save" type="button" data-save>保存する</button>
+                    <p class="hint" data-hint>写真・作業内容・植物・メモのどれか1つで保存できます</p>
+                  </div>
+                  <div class="toast hidden" data-toast></div>
+                </div>
+              </div>
+              <div class="notes">
+                <h4>変えた点</h4>
+                <ul>
+                  <li>写真を画面幅いっぱい・4:3で最上部に。撮った写りをその場で大きく確かめられる</li>
+                  <li>植物・メモは「植物・メモを書く」に畳む。入力済みなら件数を表示</li>
+                  <li>作業日は場所名の下に小さく</li>
+                </ul>
+                <h4>気になる点</h4>
+                <ul>
+                  <li>写真を撮らない日も、大きな空き枠が目に入る</li>
+                  <li>植物をよく付ける人には、毎回開く手間が増える</li>
+                </ul>
+              </div>
+            </article>
+          </div>
+        </section>
+        <!-- ===================== Round 2 ===================== -->
+        <section class="round">
+          <div class="round-head">
+            <h2>Round 2</h2>
+            <span class="date">2026-09-27</span>
+          </div>
+          <p class="round-desc">
+            案2をベースに、案3の写真枠と「植物・メモを書く」の折りたたみを組み合わせた案。
+            順番は 場所 → 作業日 → 写真 → 作業内容 →「植物・メモを書く」→ 保存（画面下に固定）。
+            左は開いた直後、右は入力したあと（「植物・メモを書く」を開いた状態）の見え方。どちらも操作できる。
+          </p>
+
+          <div class="options">
+            <article class="option">
+              <h3 class="option-title"><span>2-A</span>開いた直後</h3>
+              <p class="option-lead">場所タイルを押した直後。スクロールせずに、写真・作業内容・「植物・メモを書く」・保存まで見える。</p>
+              <div class="phone">
+                <div class="liff-bar">そだログ（検証用）</div>
+                <div class="screen r2" data-screen>
+                  <div class="head">
+                    <div class="head-top">
+                      <div class="place">北側の花壇</div>
+                      <button class="link" type="button" data-change-place>場所を変える</button>
+                    </div>
+                    <label class="date-chip">
+                      作業日 <span data-date-text></span>
+                      <span class="act">変更</span>
+                      <input class="date-input" type="date" data-date-input aria-label="作業日">
+                    </label>
+                  </div>
+                  <div class="body">
+                    <button class="photo-stage" type="button" data-photo-add data-photo-stage>
+                      <span data-photo-empty style="display: contents">
+                        <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 8h3l2-2h6l2 2h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>
+                        <span class="t">写真を撮る・選ぶ</span>
+                        <span class="s">1枚まで・なくても保存できます</span>
+                      </span>
+                      <img class="photo-img hidden" data-photo-img alt="選んだ写真" style="position: absolute; inset: 0">
+                    </button>
+                    <div class="label">作業内容</div>
+                    <div class="grid" data-chips data-chip-class="cell"></div>
+                    <button class="more-toggle" type="button" data-more-toggle aria-expanded="false">
+                      <span>植物・メモを書く</span>
+                      <span class="meta" data-more-meta>＋</span>
+                    </button>
+                    <div class="more hidden" data-more>
+                      <div class="label">植物</div>
+                      <div class="tag-field">
+                        <span data-tags style="display: contents"></span>
+                        <input type="text" data-tag-input placeholder="例：アジサイ" enterkeyhint="done">
+                        <button class="add" type="button" data-tag-add>追加</button>
+                      </div>
+                      <p class="field-error hidden" data-tag-error></p>
+                      <div class="label">メモ</div>
+                      <textarea class="memo" data-memo placeholder="気づいたことなど"></textarea>
+                      <p class="counter" data-counter></p>
+                    </div>
+                  </div>
+                  <div class="savebar">
+                    <p class="save-error hidden" data-save-error></p>
+                    <div class="save-row">
+                      <div class="summary" data-summary></div>
+                      <button class="btn-primary save" type="button" data-save>保存する</button>
+                    </div>
+                  </div>
+                  <div class="toast hidden" data-toast></div>
+                </div>
+              </div>
+            </article>
+
+            <article class="option">
+              <h3 class="option-title"><span>2-B</span>入力したあと</h3>
+              <p class="option-lead">写真を入れ、作業を2つ選び、「植物・メモを書く」を開いて植物とメモを入れた状態。保存欄に要約が出る。</p>
+              <div class="phone">
+                <div class="liff-bar">そだログ（検証用）</div>
+                <div class="screen r2" data-screen data-prefill>
+                  <div class="head">
+                    <div class="head-top">
+                      <div class="place">北側の花壇</div>
+                      <button class="link" type="button" data-change-place>場所を変える</button>
+                    </div>
+                    <label class="date-chip">
+                      作業日 <span data-date-text></span>
+                      <span class="act">変更</span>
+                      <input class="date-input" type="date" data-date-input aria-label="作業日">
+                    </label>
+                  </div>
+                  <div class="body">
+                    <button class="photo-stage" type="button" data-photo-add data-photo-stage>
+                      <span data-photo-empty style="display: contents">
+                        <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 8h3l2-2h6l2 2h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>
+                        <span class="t">写真を撮る・選ぶ</span>
+                        <span class="s">1枚まで・なくても保存できます</span>
+                      </span>
+                      <img class="photo-img hidden" data-photo-img alt="選んだ写真" style="position: absolute; inset: 0">
+                    </button>
+                    <div class="label">作業内容</div>
+                    <div class="grid" data-chips data-chip-class="cell"></div>
+                    <button class="more-toggle" type="button" data-more-toggle aria-expanded="false">
+                      <span>植物・メモを書く</span>
+                      <span class="meta" data-more-meta>＋</span>
+                    </button>
+                    <div class="more hidden" data-more>
+                      <div class="label">植物</div>
+                      <div class="tag-field">
+                        <span data-tags style="display: contents"></span>
+                        <input type="text" data-tag-input placeholder="例：アジサイ" enterkeyhint="done">
+                        <button class="add" type="button" data-tag-add>追加</button>
+                      </div>
+                      <p class="field-error hidden" data-tag-error></p>
+                      <div class="label">メモ</div>
+                      <textarea class="memo" data-memo placeholder="気づいたことなど"></textarea>
+                      <p class="counter" data-counter></p>
+                    </div>
+                  </div>
+                  <div class="savebar">
+                    <p class="save-error hidden" data-save-error></p>
+                    <div class="save-row">
+                      <div class="summary" data-summary></div>
+                      <button class="btn-primary save" type="button" data-save>保存する</button>
+                    </div>
+                  </div>
+                  <div class="toast hidden" data-toast></div>
+                </div>
+              </div>
+            </article>
+
+            <aside class="option notes" style="width: 340px; margin-top: 0">
+              <h4>組み合わせた内容</h4>
+              <ul>
+                <li>案2から：場所と作業日を上部の色付き見出しにまとめる。作業内容の3列×3行の格子。保存欄の要約（「水やり・剪定・写真1枚…」）</li>
+                <li>案3から：画面幅・4:3の「写真を撮る・選ぶ」枠。写真の上に重ねた「変える」「外す」。「植物・メモを書く」の折りたたみ（入力済みなら件数を表示）</li>
+              </ul>
+              <h4>私の判断で決めた細部</h4>
+              <ul>
+                <li>保存欄は案2の形（左に要約、右に保存ボタン）。空のときは要約の位置に「どれか1つで保存できます」を出す</li>
+                <li>植物の入力は案2の形（入力欄の中にタグが並ぶ）</li>
+                <li>写真枠の案内文を「1枚まで・なくても保存できます」に</li>
+              </ul>
+              <h4>気になる点</h4>
+              <ul>
+                <li>写真を撮らない日も、写真枠が画面の大きな部分を占める</li>
+                <li>作業日の「変更」が小さく、気づきにくい可能性（Round 1 の案2と同じ）</li>
+              </ul>
+            </aside>
+          </div>
+        </section>
+
+        <!-- ===================== Round 3 ===================== -->
+        <section class="round">
+          <div class="round-head">
+            <h2>Round 3</h2>
+            <span class="date">2026-09-27</span>
+          </div>
+          <p class="round-desc">
+            Round 2 の構成（場所 → 作業日 → 写真 → 作業内容3列×3行 →「植物・メモを書く」→ 固定の保存）はそのまま。
+            ①場所の色（「北側の花壇」のタイルの色＝空色）の濃淡で、場所帯・写真枠・選択中の作業・「植物・メモを書く」の内側・保存ボタンを統一し、全体を明るいペールトーンに。
+            保存ボタンと「変更」は、その場所色で最も濃い色＋白文字。
+            ②作業日を横長の枠にし、右に塗りつぶしの「変更」ボタン（手書きメモのとおり）。
+          </p>
+
+          <div class="options">
+            <article class="option">
+              <h3 class="option-title"><span>3-A</span>開いた直後（北側の花壇・空色）</h3>
+              <p class="option-lead">場所タイルを押した直後。スクロールせずに保存欄まで見える。</p>
+              <div class="phone">
+                <div class="liff-bar">そだログ（検証用）</div>
+                <div data-r3-screen class="tone-sora"></div>
+              </div>
+            </article>
+
+            <article class="option">
+              <h3 class="option-title"><span>3-B</span>入力したあと（北側の花壇・空色）</h3>
+              <p class="option-lead">写真・作業2つ・植物・メモを入れ、「植物・メモを書く」を開いた状態。開いた内側も場所色の淡い面になる。</p>
+              <div class="phone">
+                <div class="liff-bar">そだログ（検証用）</div>
+                <div data-r3-screen class="tone-sora" data-prefill></div>
+              </div>
+            </article>
+
+            <article class="option">
+              <h3 class="option-title"><span>3-C</span>参考：別の場所の色（若葉色）</h3>
+              <p class="option-lead">場所ごとに色が変わっても同じ作りで成り立つかの確認用。タイルの8色それぞれに、同じ手順で濃淡を用意する想定。</p>
+              <div class="phone">
+                <div class="liff-bar">そだログ（検証用）</div>
+                <div data-r3-screen class="tone-wakaba" data-prefill data-place-name="南側の花壇"></div>
+              </div>
+            </article>
+
+            <aside class="option notes" style="width: 340px; margin-top: 0">
+              <h4>色の決め方（空色の場合）</h4>
+              <ul>
+                <li>場所帯 #e6ecfa：タイルの色 #dde3f5 と同じ色相で、少し明るく</li>
+                <li>写真枠 #eef2fc・画面の地 #f7f9fe・開いた内側 #f1f4fd：さらに淡く</li>
+                <li>選択中の作業 #5a6eb2（白文字との差 約5:1）</li>
+                <li>保存・「変更」 #3f5396（最も濃い。白文字との差 約7:1）</li>
+                <li>文字は色味のない濃いグレーにし、どの場所色でも読みやすく</li>
+              </ul>
+              <h4>作業日</h4>
+              <ul>
+                <li>白地の横長の枠に「作業日 2026/09/27（今日）」と、右に塗りつぶしの「変更」</li>
+                <li>「変更」だけでなく、枠のどこを押しても日付選択が開く</li>
+              </ul>
+              <h4>気になる点</h4>
+              <ul>
+                <li>場所タイルの画面は緑基調のまま。記録画面に入ると色が場所色に切り替わる</li>
+                <li>本番に入れるときは、タイルの8色それぞれに濃淡の組を用意する必要がある</li>
+              </ul>
+            </aside>
+          </div>
+
+          <template id="r3Template">
+            <div class="screen r3" data-screen>
+              <div class="head">
+                <div class="head-top">
+                  <div class="place">北側の花壇</div>
+                  <button class="link" type="button" data-change-place>場所を変える</button>
+                </div>
+                <label class="date-box">
+                  <span><span class="date-label">作業日</span><span class="date-value" data-date-text></span></span>
+                  <span class="change">変更</span>
+                  <input class="date-input" type="date" data-date-input aria-label="作業日を変更">
+                </label>
+              </div>
+              <div class="body">
+                <button class="photo-stage" type="button" data-photo-add data-photo-stage>
+                  <span data-photo-empty style="display: contents">
+                    <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 8h3l2-2h6l2 2h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>
+                    <span class="t">写真を撮る・選ぶ</span>
+                    <span class="s">1枚まで・なくても保存できます</span>
+                  </span>
+                  <img class="photo-img hidden" data-photo-img alt="選んだ写真" style="position: absolute; inset: 0">
+                </button>
+                <div class="label">作業内容</div>
+                <div class="grid" data-chips data-chip-class="cell"></div>
+                <div class="fold">
+                  <button class="more-toggle" type="button" data-more-toggle aria-expanded="false">
+                    <span>植物・メモを書く</span>
+                    <span class="meta" data-more-meta>＋</span>
+                  </button>
+                  <div class="more hidden" data-more>
+                    <div class="label">植物</div>
+                    <div class="tag-field">
+                      <span data-tags style="display: contents"></span>
+                      <input type="text" data-tag-input placeholder="例：アジサイ" enterkeyhint="done">
+                      <button class="add" type="button" data-tag-add>追加</button>
+                    </div>
+                    <p class="field-error hidden" data-tag-error></p>
+                    <div class="label">メモ</div>
+                    <textarea class="memo" data-memo placeholder="気づいたことなど"></textarea>
+                    <p class="counter" data-counter></p>
+                  </div>
+                </div>
+              </div>
+              <div class="savebar">
+                <p class="save-error hidden" data-save-error></p>
+                <div class="save-row">
+                  <div class="summary" data-summary></div>
+                  <button class="btn-primary save" type="button" data-save>保存する</button>
+                </div>
+              </div>
+              <div class="toast hidden" data-toast></div>
+            </div>
+          </template>
+        </section>
+
+        <!-- ===================== Round 4 ===================== -->
+        <section class="round">
+          <div class="round-head">
+            <h2>Round 4</h2>
+            <span class="date">2026-09-27</span>
+          </div>
+          <p class="round-desc">
+            作業日の選び方だけを変更（構成・色・配置は Round 3 のまま）。横長の作業日枠と塗りつぶしの「変更」は維持し、
+            「作業日 2026/09/27（今日）」を押しても「変更」を押しても、同じカレンダーが画面の下から出る。
+            カレンダーは画面の横幅いっぱいで、今日（枠線と「今日」）と選んでいる日（塗りつぶし）が分かる。未来の日は選べない。
+          </p>
+
+          <div class="options">
+            <article class="option">
+              <h3 class="option-title"><span>4-A</span>記録画面（北側の花壇）</h3>
+              <p class="option-lead">作業日の枠を押すとカレンダーが開く。見た目は Round 3 と同じ。</p>
+              <div class="phone">
+                <div class="liff-bar">そだログ（検証用）</div>
+                <div data-r3-screen class="tone-sora" data-date-variant="calendar"></div>
+              </div>
+            </article>
+
+            <article class="option">
+              <h3 class="option-title"><span>4-B</span>カレンダーを開いた状態</h3>
+              <p class="option-lead">見本として 9/20 を選びかけた状態で開いている。「この日にする」で決定、「キャンセル」「閉じる」・背景を押すと元の日付のまま閉じる。</p>
+              <div class="phone">
+                <div class="liff-bar">そだログ（検証用）</div>
+                <div data-r3-screen class="tone-sora" data-date-variant="calendar" data-open-calendar="2026-09-20"></div>
+              </div>
+            </article>
+
+            <article class="option">
+              <h3 class="option-title"><span>4-C</span>参考：若葉色の場所で開いた状態</h3>
+              <p class="option-lead">カレンダーも場所の色（今日の枠線・選んでいる日・決定ボタン）に合わせる。</p>
+              <div class="phone">
+                <div class="liff-bar">そだログ（検証用）</div>
+                <div data-r3-screen class="tone-wakaba" data-date-variant="calendar" data-open-calendar="today" data-place-name="南側の花壇"></div>
+              </div>
+            </article>
+
+            <aside class="option notes" style="width: 340px; margin-top: 0">
+              <h4>作業日の枠</h4>
+              <ul>
+                <li>枠全体が1つのボタン。「作業日 …」の部分でも「変更」でも同じカレンダーが開く</li>
+                <li>端末標準の小さな日付入力は使わず、画面内のカレンダーにした</li>
+              </ul>
+              <h4>カレンダー</h4>
+              <ul>
+                <li>画面の下から出るシート。横幅いっぱいで、日付のマスは約48pxの正方形</li>
+                <li>上部に「選択中 2026/09/20」を大きく表示</li>
+                <li>今日＝場所色の枠線と「今日」の文字。選んでいる日＝最も濃い場所色で塗りつぶし</li>
+                <li>未来の日は薄く表示して押せない。今月より先へは進めない</li>
+                <li>日を押しただけでは決まらず、「この日にする」で決定。閉じ方は「閉じる」「キャンセル」・背景を押す・Escキーの4つで、どれも元の日付のまま</li>
+                <li>別の月を見ているときも「今日にする」ですぐ戻れる</li>
+                <li>土曜・日曜は文字色を変えた（青・赤）</li>
+              </ul>
+              <h4>気になる点</h4>
+              <ul>
+                <li>日を押してすぐ閉じる方式（決定ボタンなし）のほうが速い。今回は押し間違いを防ぐため決定ボタン方式にした</li>
+                <li>過去の日付をどこまでさかのぼれるか（今は制限なし）</li>
+              </ul>
+            </aside>
+          </div>
+        </section>
+
+        <!-- ===================== Round 5 ===================== -->
+        <section class="round">
+          <div class="round-head">
+            <h2>Round 5</h2>
+            <span class="date">2026-09-27</span>
+          </div>
+          <p class="round-desc">
+            Round 4 はそのままに、①長い場所名への対応と、②場所タイル8色すべての濃淡セットを追加。ダークモードは作らない（ライトモードのみ）。
+            8色は同じ計算ルールで作った（元の色の色相のまま、明るさだけを変える）。空色は Round 3・4 の手作業の値から、このルールの値に置き換わる（見た目はほぼ同じ）。
+          </p>
+
+          <h3 class="subhead">① 長い場所名（「場所を変える」は1行固定。場所名は2行まで、長さで文字を小さく）</h3>
+          <div class="options">
+            <article class="option">
+              <h3 class="option-title"><span>5-A</span>短い名前（2文字・桜）</h3>
+              <p class="option-lead">8文字までは 21px（今と同じ）。</p>
+              <div class="phone">
+                <div class="liff-bar">そだログ（検証用）</div>
+                <div data-r3-screen class="r5" data-tone="sakura" data-date-variant="calendar" data-place-name="玄関"></div>
+              </div>
+            </article>
+            <article class="option">
+              <h3 class="option-title"><span>5-B</span>中くらい（11文字・水）</h3>
+              <p class="option-lead">9〜14文字は 18px。</p>
+              <div class="phone">
+                <div class="liff-bar">そだログ（検証用）</div>
+                <div data-r3-screen class="r5" data-tone="mizu" data-date-variant="calendar" data-place-name="東側フェンス沿いの花壇"></div>
+              </div>
+            </article>
+            <article class="option">
+              <h3 class="option-title"><span>5-C</span>上限の20文字（藤）</h3>
+              <p class="option-lead">15〜20文字は 16px。2行に収まる。万一はみ出す場合は2行目の末尾を「…」で切る。</p>
+              <div class="phone">
+                <div class="liff-bar">そだログ（検証用）</div>
+                <div data-r3-screen class="r5" data-tone="fuji" data-date-variant="calendar" data-place-name="東側フェンス沿いの白いプランターと小菜園"></div>
+              </div>
+            </article>
+            <aside class="option notes" style="width: 340px; margin-top: 0">
+              <h4>文字サイズの段階（場所タイルと同じ考え方）</h4>
+              <ul>
+                <li>場所タイルは「6文字まで・12文字まで・それ以上」の3段階（20/18/16px）</li>
+                <li>記録画面の場所名は横幅が狭い（「場所を変える」の分）ため、「8文字まで 21px・14文字まで 18px・それ以上 16px」の3段階にした</li>
+                <li>20文字（場所名の上限）でも 16px で2行に収まる</li>
+              </ul>
+              <h4>「場所を変える」</h4>
+              <ul>
+                <li>折り返さず1行固定。場所名が2行になっても右上に置いたまま</li>
+              </ul>
+            </aside>
+          </div>
+
+          <h3 class="subhead">② 場所タイル8色の濃淡セット（記録画面用）と読みやすさの確認</h3>
+          <p class="round-desc" style="margin-bottom: 14px">
+            各カードの表は、文字と背景の明るさの差（コントラスト比）。読みやすさの基準は 4.5 以上（✓）。数値はこのページが色の値から計算している。
+            白文字を載せる色（保存・変更・選択中の作業）は、基準を満たす範囲でいちばん明るい色を選んだ。
+          </p>
+          <div id="toneCards" class="tone-cards"></div>
+        </section>
+        <!-- 次のラウンドはここより下に追加する -->
+      </div>
+    </div>
+
+    <script>
+      // 検証用ページと同じ規則(docs/sodalog-spec.md 3.1節・6章)
+      const WORK_TYPES = ["水やり", "草取り", "肥料", "剪定", "植え付け", "植え替え", "成長記録", "収穫", "撤去"];
+      const TAG_MAX_LENGTH = 20;
+      const TAG_MAX_COUNT = 10;
+      const MEMO_MAX_LENGTH = 300;
+      const PLACE_NAME = "北側の花壇";
+
+      function todayJst() {
+        return new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      }
+
+      // 検討用のサンプル写真(外部の画像は読み込まない)
+      const samplePhoto = (function () {
+        const canvas = document.createElement("canvas");
+        canvas.width = 800;
+        canvas.height = 600;
+        const g = canvas.getContext("2d");
+        const sky = g.createLinearGradient(0, 0, 0, 600);
+        sky.addColorStop(0, "#cfe3d2");
+        sky.addColorStop(1, "#6f9a6f");
+        g.fillStyle = sky;
+        g.fillRect(0, 0, 800, 600);
+        const leaves = [["#3f6b45", 90], ["#588a58", 70], ["#7fae6f", 50]];
+        leaves.forEach(function (leaf, layer) {
+          for (let i = 0; i < 28; i++) {
+            const x = (i * 97 + layer * 53) % 820;
+            const y = 330 + layer * 70 + ((i * 37) % 60);
+            g.fillStyle = leaf[0];
+            g.beginPath();
+            g.ellipse(x, y, leaf[1], leaf[1] * 0.45, (i % 5) * 0.5, 0, Math.PI * 2);
+            g.fill();
+          }
+        });
+        g.fillStyle = "#f3c4d0";
+        [[210, 300], [470, 270], [640, 330]].forEach(function (p) {
+          g.beginPath();
+          g.arc(p[0], p[1], 34, 0, Math.PI * 2);
+          g.fill();
+        });
+        return canvas.toDataURL("image/jpeg", 0.85);
+      })();
+
+      function setupScreen(root) {
+        const q = function (selector) { return root.querySelector(selector); };
+        const qa = function (selector) { return Array.from(root.querySelectorAll(selector)); };
+        const state = { workDate: todayJst(), workTypes: [], tags: [], photo: false, pendingId: null, saving: false, failed: false };
+
+        const dateInput = q("[data-date-input]");
+        const tagInput = q("[data-tag-input]");
+        const memo = q("[data-memo]");
+        const save = q("[data-save]");
+        const saveError = q("[data-save-error]");
+        const tagError = q("[data-tag-error]");
+        const more = q("[data-more]");
+
+        function memoLength() {
+          return Array.from(memo.value.trim()).length;
+        }
+
+        function hasContent() {
+          return state.photo || state.workTypes.length > 0 || state.tags.length > 0 ||
+            tagInput.value.trim() !== "" || memo.value.trim() !== "";
+        }
+
+        function renderDate() {
+          const today = todayJst();
+          q("[data-date-text]").textContent = state.workDate.replace(/-/g, "/") + (state.workDate === today ? "（今日）" : "");
+          const opener = q("[data-date-open]");
+          if (opener) {
+            opener.setAttribute("aria-label", "作業日 " + q("[data-date-text]").textContent + "。押すと変更できます");
+          }
+          if (dateInput) {
+            dateInput.max = today;
+            dateInput.value = state.workDate;
+          }
+        }
+
+        function renderChips() {
+          const container = q("[data-chips]");
+          const chipClass = container.dataset.chipClass;
+          container.replaceChildren();
+          WORK_TYPES.forEach(function (name) {
+            const chip = document.createElement("button");
+            chip.type = "button";
+            chip.className = chipClass;
+            chip.textContent = name;
+            chip.setAttribute("aria-pressed", String(state.workTypes.includes(name)));
+            chip.addEventListener("click", function () {
+              if (state.saving) {
+                return;
+              }
+              state.workTypes = state.workTypes.includes(name)
+                ? state.workTypes.filter(function (w) { return w !== name; })
+                : state.workTypes.concat([name]);
+              renderChips();
+              update();
+            });
+            container.append(chip);
+          });
+        }
+
+        function renderTags() {
+          const container = q("[data-tags]");
+          container.replaceChildren();
+          state.tags.forEach(function (tag) {
+            const item = document.createElement("span");
+            item.className = "tag";
+            item.append(document.createTextNode(tag));
+            const remove = document.createElement("button");
+            remove.type = "button";
+            remove.textContent = "×";
+            remove.setAttribute("aria-label", tag + " を外す");
+            remove.addEventListener("click", function () {
+              state.tags = state.tags.filter(function (t) { return t !== tag; });
+              renderTags();
+              update();
+            });
+            item.append(remove);
+            container.append(item);
+          });
+        }
+
+        function showTagError(message) {
+          tagError.textContent = message;
+          tagError.classList.toggle("hidden", !message);
+        }
+
+        function addTag() {
+          const tag = tagInput.value.normalize("NFKC").trim();
+          if (!tag) {
+            tagInput.value = "";
+            showTagError("");
+            return true;
+          }
+          if (Array.from(tag).length > TAG_MAX_LENGTH) {
+            showTagError("1つ20文字以内で入力してください。");
+            return false;
+          }
+          if (!state.tags.includes(tag)) {
+            if (state.tags.length >= TAG_MAX_COUNT) {
+              showTagError("植物は10個までです。");
+              return false;
+            }
+            state.tags = state.tags.concat([tag]);
+          }
+          tagInput.value = "";
+          showTagError("");
+          renderTags();
+          update();
+          return true;
+        }
+
+        function renderPhoto() {
+          qa("[data-photo-img]").forEach(function (img) {
+            img.classList.toggle("hidden", !state.photo);
+            if (state.photo) {
+              img.src = samplePhoto;
+            } else {
+              img.removeAttribute("src");
+            }
+          });
+          qa("[data-photo-empty]").forEach(function (el) { el.classList.toggle("hidden", state.photo); });
+          qa("[data-photo-has]").forEach(function (el) { el.classList.toggle("hidden", !state.photo); });
+          qa("[data-photo-remove]").forEach(function (el) { el.classList.toggle("hidden", !state.photo); });
+          const v1Add = q(".v1 .photo-add, .photo-add");
+          if (v1Add) {
+            v1Add.classList.toggle("hidden", state.photo);
+          }
+          const tile = q("[data-photo-tile]");
+          if (tile) {
+            tile.classList.toggle("has", state.photo);
+          }
+          const caption = q("[data-photo-caption]");
+          if (caption) {
+            caption.textContent = state.photo ? "タップで写真を変える" : "1枚まで。撮影またはライブラリから";
+          }
+          const stage = q("[data-photo-stage]");
+          if (stage) {
+            let over = stage.querySelector(".photo-over");
+            if (state.photo && !over) {
+              over = document.createElement("span");
+              over.className = "photo-over";
+              over.innerHTML = '<button type="button" data-photo-change>変える</button><button type="button" data-photo-clear>外す</button>';
+              over.querySelector("[data-photo-clear]").addEventListener("click", function (event) {
+                event.stopPropagation();
+                state.photo = false;
+                renderPhoto();
+                update();
+              });
+              stage.append(over);
+            } else if (!state.photo && over) {
+              over.remove();
+            }
+          }
+        }
+
+        function summaryText() {
+          const parts = [];
+          if (state.workTypes.length) {
+            parts.push("<b>" + WORK_TYPES.filter(function (w) { return state.workTypes.includes(w); }).join("・") + "</b>");
+          }
+          if (state.photo) {
+            parts.push("写真1枚");
+          }
+          if (state.tags.length) {
+            parts.push("植物" + state.tags.length);
+          }
+          if (memo.value.trim()) {
+            parts.push("メモ");
+          }
+          return parts.length ? parts.join("・") : "作業・写真・植物・メモのどれか1つで保存できます";
+        }
+
+        function update() {
+          const content = hasContent();
+          save.disabled = state.saving || !content || memoLength() > MEMO_MAX_LENGTH;
+          save.classList.toggle("saving", state.saving);
+          save.textContent = state.saving ? "保存しています…" : state.pendingId ? "もう一度保存" : "保存する";
+          const hint = q("[data-hint]");
+          if (hint) {
+            hint.classList.toggle("hidden", content);
+          }
+          const summary = q("[data-summary]");
+          if (summary) {
+            summary.innerHTML = summaryText();
+          }
+          const counter = q("[data-counter]");
+          counter.textContent = memoLength() + " / " + MEMO_MAX_LENGTH;
+          counter.classList.toggle("over", memoLength() > MEMO_MAX_LENGTH);
+          const meta = q("[data-more-meta]");
+          if (meta) {
+            const bits = [];
+            if (state.tags.length) {
+              bits.push("植物" + state.tags.length);
+            }
+            if (memo.value.trim()) {
+              bits.push("メモあり");
+            }
+            meta.textContent = more.classList.contains("hidden") ? (bits.length ? bits.join("・") + "　＋" : "＋") : "閉じる";
+          }
+          qa("[data-change-place]").forEach(function (el) { el.disabled = state.saving; });
+        }
+
+        function toast(message) {
+          const el = q("[data-toast]");
+          el.textContent = message;
+          el.classList.remove("hidden");
+          clearTimeout(el._timer);
+          el._timer = setTimeout(function () { el.classList.add("hidden"); }, 2400);
+        }
+
+        function reset() {
+          state.workDate = todayJst();
+          state.workTypes = [];
+          state.tags = [];
+          state.photo = false;
+          state.pendingId = null;
+          tagInput.value = "";
+          memo.value = "";
+          showTagError("");
+          saveError.classList.add("hidden");
+          if (more) {
+            more.classList.add("hidden");
+          }
+          renderDate();
+          renderChips();
+          renderTags();
+          renderPhoto();
+          update();
+          root.scrollTop = 0;
+        }
+
+        // 保存の動き(検証用ページと同じ: 押せなくする→「保存しています…」→成功で場所タイルへ/失敗で「もう一度保存」)
+        save.addEventListener("click", function () {
+          if (state.saving || !addTag() || !hasContent()) {
+            return;
+          }
+          state.pendingId = state.pendingId || "rec-" + Date.now();
+          state.saving = true;
+          saveError.classList.add("hidden");
+          update();
+          setTimeout(function () {
+            state.saving = false;
+            if (document.getElementById("failOnce").checked && !state.failed) {
+              state.failed = true;
+              saveError.textContent = "保存できませんでした。通信状況を確認して、もう一度保存してください。";
+              saveError.classList.remove("hidden");
+              update();
+              return;
+            }
+            state.failed = false;
+            reset();
+            const placeEl = root.querySelector(".place");
+            toast("「" + (placeEl ? placeEl.textContent : PLACE_NAME) + "」に記録しました（検討用：場所タイルに戻ります）");
+          }, 1500);
+        });
+
+        if (dateInput) {
+          dateInput.addEventListener("change", function () {
+            if (/^\d{4}-\d{2}-\d{2}$/.test(dateInput.value) && dateInput.value <= todayJst()) {
+              state.workDate = dateInput.value;
+            }
+            renderDate();
+          });
+        }
+
+        function pickDate(initial) {
+          openCalendar(root, state.workDate, initial, function (picked) {
+            state.workDate = picked;
+            renderDate();
+          });
+        }
+
+        const dateOpener = q("[data-date-open]");
+        if (dateOpener) {
+          dateOpener.addEventListener("click", function () {
+            if (!state.saving) {
+              pickDate(null);
+            }
+          });
+        }
+
+        root.addEventListener("click", function (event) {
+          if (event.target.closest("[data-photo-remove]")) {
+            state.photo = false;
+            renderPhoto();
+            update();
+          } else if (event.target.closest("[data-photo-add]") && !state.saving) {
+            // 検討用: 端末の写真選択の代わりにサンプル写真を入れる
+            state.photo = true;
+            renderPhoto();
+            update();
+          } else if (event.target.closest("[data-change-place]")) {
+            toast("（検討用）場所タイルの画面に戻ります");
+          }
+        });
+
+        q("[data-tag-add]").addEventListener("click", addTag);
+        tagInput.addEventListener("keydown", function (event) {
+          if (event.key === "Enter" && !event.isComposing) {
+            event.preventDefault();
+            addTag();
+          }
+        });
+        tagInput.addEventListener("input", update);
+        memo.addEventListener("input", update);
+
+        const moreToggle = q("[data-more-toggle]");
+        if (moreToggle) {
+          moreToggle.addEventListener("click", function () {
+            const open = more.classList.toggle("hidden") === false;
+            moreToggle.setAttribute("aria-expanded", String(open));
+            update();
+          });
+        }
+
+        reset();
+
+        // 「入力したあと」の見本: 写真・作業2つ・植物・メモを入れ、「植物・メモを書く」を開いておく
+        if (root.hasAttribute("data-prefill")) {
+          state.photo = true;
+          state.workTypes = ["水やり", "剪定"];
+          state.tags = ["アジサイ", "ホスタ"];
+          memo.value = "つぼみが増えてきた。下の葉が少し黄色い。";
+          more.classList.remove("hidden");
+          moreToggle.setAttribute("aria-expanded", "true");
+          renderChips();
+          renderTags();
+          renderPhoto();
+          update();
+        }
+
+        // 「カレンダーを開いた状態」の見本
+        const openAt = root.getAttribute("data-open-calendar");
+        if (openAt) {
+          pickDate(openAt === "today" ? null : openAt);
+        }
+      }
+
+      /*
+       * 作業日のカレンダー(画面の下から出るシート)。
+       * current: いまの作業日 / initial: 開いたときに仮に選んでおく日(見本用。通常は null)
+       * 日を押しただけでは決まらず、「この日にする」で onPick を呼ぶ。閉じる・キャンセル・背景・Esc は元の日付のまま。
+       */
+      const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
+
+      function openCalendar(root, current, initial, onPick) {
+        const host = root.closest(".phone");
+        const opener = root.querySelector("[data-date-open]");
+        const today = todayJst();
+        let picked = initial || current;
+        let view = picked.slice(0, 7);
+
+        const existing = host.querySelector(".cal-overlay");
+        if (existing) {
+          existing.remove();
+        }
+
+        const overlay = document.createElement("div");
+        overlay.className = "cal-overlay " + Array.from(root.classList).filter(function (c) { return c.indexOf("tone-") === 0; }).join(" ");
+        overlay.innerHTML =
+          '<div class="cal-sheet" role="dialog" aria-modal="true" aria-label="作業日を選ぶ">' +
+          '  <div class="cal-top"><p class="cal-title">作業日を選ぶ</p>' +
+          '    <button class="cal-close" type="button" data-cal-close><span aria-hidden="true">×</span>閉じる</button></div>' +
+          '  <div class="cal-picked">選択中<b data-cal-picked></b></div>' +
+          '  <div class="cal-nav">' +
+          '    <button type="button" data-cal-prev aria-label="前の月">‹</button>' +
+          '    <span class="month" data-cal-month></span>' +
+          '    <button type="button" data-cal-next aria-label="次の月">›</button></div>' +
+          '  <div class="cal-grid" data-cal-grid></div>' +
+          '  <div class="cal-legend"><span><i class="l-today"></i>今日</span><span><i class="l-selected"></i>選んでいる日</span></div>' +
+          '  <button class="cal-today-link" type="button" data-cal-today>今日にする</button>' +
+          '  <div class="cal-actions">' +
+          '    <button class="cancel" type="button" data-cal-close>キャンセル</button>' +
+          '    <button class="ok" type="button" data-cal-ok>この日にする</button></div>' +
+          '</div>';
+        host.append(overlay);
+
+        function label(iso) {
+          return iso.replace(/-/g, "/") + (iso === today ? "（今日）" : "");
+        }
+
+        function render() {
+          const parts = view.split("-").map(Number);
+          const year = parts[0];
+          const month = parts[1];
+          overlay.querySelector("[data-cal-month]").textContent = year + "年" + month + "月";
+          overlay.querySelector("[data-cal-picked]").textContent = label(picked);
+          overlay.querySelector("[data-cal-next]").disabled = view >= today.slice(0, 7);
+
+          const grid = overlay.querySelector("[data-cal-grid]");
+          grid.replaceChildren();
+          WEEKDAYS.forEach(function (name, i) {
+            const cell = document.createElement("div");
+            cell.className = "cal-week" + (i === 0 ? " sun" : i === 6 ? " sat" : "");
+            cell.textContent = name;
+            grid.append(cell);
+          });
+          const offset = new Date(Date.UTC(year, month - 1, 1)).getUTCDay();
+          const days = new Date(Date.UTC(year, month, 0)).getUTCDate();
+          for (let i = 0; i < offset; i++) {
+            grid.append(document.createElement("span"));
+          }
+          for (let day = 1; day <= days; day++) {
+            const iso = year + "-" + String(month).padStart(2, "0") + "-" + String(day).padStart(2, "0");
+            const weekday = (offset + day - 1) % 7;
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "cal-day" + (weekday === 0 ? " sun" : weekday === 6 ? " sat" : "");
+            button.disabled = iso > today;
+            button.append(document.createTextNode(String(day)));
+            if (iso === today) {
+              button.classList.add("today");
+              const mark = document.createElement("span");
+              mark.className = "today-mark";
+              mark.textContent = "今日";
+              button.append(mark);
+            }
+            if (iso === picked) {
+              button.classList.add("selected");
+              button.setAttribute("aria-pressed", "true");
+            }
+            button.setAttribute("aria-label", month + "月" + day + "日" + (iso === today ? "（今日）" : ""));
+            button.addEventListener("click", function () {
+              picked = iso;
+              render();
+            });
+            grid.append(button);
+          }
+        }
+
+        function shiftMonth(delta) {
+          const parts = view.split("-").map(Number);
+          const date = new Date(Date.UTC(parts[0], parts[1] - 1 + delta, 1));
+          view = date.toISOString().slice(0, 7);
+          render();
+        }
+
+        function close() {
+          overlay.remove();
+          document.removeEventListener("keydown", onKey);
+          if (opener) {
+            opener.focus({ preventScroll: true });
+          }
+        }
+
+        function onKey(event) {
+          if (event.key === "Escape") {
+            close();
+          }
+        }
+
+        overlay.addEventListener("click", function (event) {
+          if (event.target === overlay || event.target.closest("[data-cal-close]")) {
+            close();
+          } else if (event.target.closest("[data-cal-prev]")) {
+            shiftMonth(-1);
+          } else if (event.target.closest("[data-cal-next]")) {
+            shiftMonth(1);
+          } else if (event.target.closest("[data-cal-today]")) {
+            picked = today;
+            view = today.slice(0, 7);
+            render();
+          } else if (event.target.closest("[data-cal-ok]")) {
+            onPick(picked);
+            close();
+          }
+        });
+        document.addEventListener("keydown", onKey);
+        render();
+      }
+
+      /*
+       * Round 5: 場所タイル8色(liff/beta/index.html の PALETTE と同じ順)から作った記録画面用の濃淡セット。
+       * 作り方: 元の色の色相・彩度のまま明るさだけを変える。白文字を載せる chip・strong は、
+       * 白とのコントラスト比がそれぞれ 4.8・7.0 以上になる範囲でいちばん明るい色。ink は band 上で 8.5 以上。
+       */
+      const TONES = {
+        wakaba:   { name: "若葉",   tile: "#e3ecd6", bg: "#fbfdfa", band: "#f0f5e8", frame: "#f4f8ef", inner: "#f7f9f3", line: "#dce4d1", disabled: "#c4ccb8", chip: "#5f7a39", strong: "#495e2c", ink: "#3a4b23" },
+        sakura:   { name: "桜",     tile: "#f7dfdd", bg: "#fef9f9", band: "#f9e6e4", frame: "#fbeeec", inner: "#fcf1f1", line: "#eaccca", disabled: "#d3b3b1", chip: "#b6544c", strong: "#923e37", ink: "#6b2e29" },
+        sora:     { name: "空",     tile: "#dde3f5", bg: "#f9fafd", band: "#e5eaf7", frame: "#edf0fa", inner: "#f1f4fb", line: "#ccd3e8", disabled: "#b3bad1", chip: "#556eb9", strong: "#3c559f", ink: "#2c3e74" },
+        suna:     { name: "砂",     tile: "#f1e6d4", bg: "#fdfcf9", band: "#f7f0e6", frame: "#f9f5ee", inner: "#fbf7f2", line: "#e7ddcd", disabled: "#d0c5b4", chip: "#8b6c39", strong: "#6d5329", ink: "#554120" },
+        mizu:     { name: "水",     tile: "#d8ece8", bg: "#fafcfc", band: "#e9f4f2", frame: "#f0f7f6", inner: "#f3f9f8", line: "#d1e3df", disabled: "#b8cbc7", chip: "#3d7d70", strong: "#2f6056", ink: "#254b44" },
+        fuji:     { name: "藤",     tile: "#ece0f0", bg: "#fcfafd", band: "#f1e9f4", frame: "#f6f0f8", inner: "#f8f3f9", line: "#dfd1e3", disabled: "#c7b8cb", chip: "#9958ae", strong: "#79438b", ink: "#583165" },
+        nanohana: { name: "菜の花", tile: "#f5ecc8", bg: "#fefdf9", band: "#faf5e3", frame: "#fbf8ec", inner: "#fcfaf0", line: "#ece5c8", disabled: "#d5cdaf", chip: "#817135", strong: "#645726", ink: "#4f461e" },
+        koke:     { name: "苔",     tile: "#e0e8e0", bg: "#fafcfa", band: "#eaf3ea", frame: "#f1f6f1", inner: "#f4f8f4", line: "#d4e0d4", disabled: "#bbc9bb", chip: "#4b7c4b", strong: "#3a613a", ink: "#2d4b2d" },
+      };
+      const TONE_VARS = ["bg", "band", "frame", "inner", "line", "disabled", "chip", "strong", "ink"];
+
+      function applyTone(element, key) {
+        const tone = TONES[key];
+        TONE_VARS.forEach(function (name) {
+          element.style.setProperty("--c-" + name, tone[name]);
+        });
+      }
+
+      // 記録画面の場所名: 8文字まで 21px / 14文字まで 18px / それ以上 16px(2行まで)
+      function placeSizeClass(name) {
+        const length = Array.from(name).length;
+        return length <= 8 ? "" : length <= 14 ? "size-m" : "size-s";
+      }
+
+      // Round 3 の画面は1つのひな形から作る(場所の色・見本の入力状態は差し込み先の属性で指定)
+      document.querySelectorAll("[data-r3-screen]").forEach(function (slot) {
+        const screen = document.getElementById("r3Template").content.firstElementChild.cloneNode(true);
+        screen.classList.add(...slot.classList);
+        if (slot.hasAttribute("data-prefill")) {
+          screen.setAttribute("data-prefill", "");
+        }
+        if (slot.dataset.placeName) {
+          screen.querySelector(".place").textContent = slot.dataset.placeName;
+        }
+        // Round 4: 作業日の枠全体を1つのボタンにし、画面内のカレンダーを開く
+        if (slot.dataset.dateVariant === "calendar") {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "date-box";
+          button.setAttribute("data-date-open", "");
+          button.innerHTML =
+            '<span><span class="date-label">作業日</span><span class="date-value" data-date-text></span></span>' +
+            '<span class="change">変更</span>';
+          screen.querySelector(".date-box").replaceWith(button);
+        }
+        if (slot.dataset.openCalendar) {
+          screen.setAttribute("data-open-calendar", slot.dataset.openCalendar);
+        }
+        if (slot.dataset.tone) {
+          applyTone(screen, slot.dataset.tone);
+        }
+        if (screen.classList.contains("r5")) {
+          const place = screen.querySelector(".place");
+          const size = placeSizeClass(place.textContent);
+          if (size) {
+            place.classList.add(size);
+          }
+        }
+        slot.replaceWith(screen);
+      });
+
+      // ---- Round 5: 8色の見本カードと、読みやすさ(コントラスト比)の計算 ----
+      function luminance(hex) {
+        const c = [1, 3, 5].map(function (i) { return parseInt(hex.slice(i, i + 2), 16) / 255; })
+          .map(function (v) { return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
+        return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+      }
+
+      function contrast(a, b) {
+        const x = luminance(a);
+        const y = luminance(b);
+        return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+      }
+
+      const TEXT = "#26303a";
+      const MUTED = "#5f6873";
+
+      function checksFor(t) {
+        return [
+          ["保存・「変更」の白文字", "#ffffff", t.strong],
+          ["選択中の作業の白文字", "#ffffff", t.chip],
+          ["場所名（場所帯の上）", t.ink, t.band],
+          ["「場所を変える」（場所帯の上）", t.strong, t.band],
+          ["写真枠の文字", t.ink, t.frame],
+          ["写真枠の補足", MUTED, t.frame],
+          ["折りたたみ内の見出し", MUTED, t.inner],
+          ["折りたたみ内の本文", TEXT, t.inner],
+          ["植物タグ", t.ink, t.band],
+          ["「追加」ボタン", t.strong, t.frame],
+          ["カレンダーの「今日」", t.chip, "#ffffff"],
+          ["画面の地の補足文字", MUTED, t.bg],
+        ];
+      }
+
+      const toneCards = document.getElementById("toneCards");
+      Object.keys(TONES).forEach(function (key) {
+        const t = TONES[key];
+        const card = document.createElement("div");
+        card.className = "tone-card";
+        applyTone(card, key);
+        const rows = checksFor(t).map(function (check) {
+          const ratio = contrast(check[1], check[2]);
+          const ok = ratio >= 4.5;
+          return "<tr><td>" + check[0] + "</td><td>" + ratio.toFixed(1) + "</td><td class=\"" + (ok ? "ok" : "ng") + "\">" + (ok ? "✓" : "✗") + "</td></tr>";
+        }).join("");
+        card.innerHTML =
+          '<div class="tc-band"><div class="tc-name">' + t.name + '<small>場所を変える</small></div>' +
+          '<div class="tc-date"><span>作業日 2026/09/27（今日）</span><span>変更</span></div></div>' +
+          '<div class="tc-body">' +
+          '<div class="tc-photo">写真を撮る・選ぶ<small>1枚まで・なくても保存できます</small></div>' +
+          '<div class="tc-chips"><span class="on">水やり</span><span>草取り</span><span>肥料</span></div>' +
+          '<div class="tc-fold"><div class="h"><span>植物・メモを書く</span><span>閉じる</span></div>' +
+          '<div class="row"><span class="tagp">アジサイ</span><span class="addp">追加</span></div></div>' +
+          '<div class="tc-save"><span>保存する</span><span class="off">保存する（押せない）</span></div>' +
+          "<table>" + rows + "</table>" +
+          '<div class="codes">タイル ' + t.tile + "／帯 " + t.band + "／枠 " + t.frame + "<br>選択 " + t.chip + "／保存 " + t.strong + "／文字 " + t.ink + "</div>" +
+          "</div>";
+        toneCards.append(card);
+      });
+
+      document.querySelectorAll("[data-screen]").forEach(setupScreen);
+
+      // ---- ズーム(ボタンと Ctrl+ホイール。左ドラッグは画面操作のために空けておく) ----
+      const board = document.getElementById("board");
+      const viewport = document.getElementById("viewport");
+      let scale = 1;
+
+      function applyScale(next) {
+        scale = Math.min(2, Math.max(0.3, Math.round(next * 100) / 100));
+        board.style.transform = "scale(" + scale + ")";
+        board.parentElement.style.setProperty("--scale", scale);
+        document.getElementById("zoomReset").textContent = Math.round(scale * 100) + "%";
+        // 縮小したぶん、スクロール範囲も縮める
+        board.style.marginBottom = (board.offsetHeight * (scale - 1)) + "px";
+        board.style.marginRight = (board.offsetWidth * (scale - 1)) + "px";
+      }
+
+      function fit() {
+        applyScale(Math.min(1, (viewport.clientWidth - 20) / board.offsetWidth));
+      }
+
+      document.getElementById("zoomIn").addEventListener("click", function () { applyScale(scale + 0.1); });
+      document.getElementById("zoomOut").addEventListener("click", function () { applyScale(scale - 0.1); });
+      document.getElementById("zoomReset").addEventListener("click", fit);
+      document.getElementById("zoomFit").addEventListener("click", fit);
+      viewport.addEventListener("wheel", function (event) {
+        if (event.ctrlKey || event.metaKey) {
+          event.preventDefault();
+          applyScale(scale * (event.deltaY < 0 ? 1.1 : 1 / 1.1));
+        }
+      }, { passive: false });
+
+      fit();
+      window.addEventListener("resize", fit);
+    </script>
+  </body>
+</html>
