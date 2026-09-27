@@ -8,6 +8,7 @@
 import { randomBytes } from "node:crypto";
 import type { OAuth2Client } from "google-auth-library";
 import { sheets } from "@googleapis/sheets";
+import { createSerialQueue } from "./queue";
 import { LOCATIONS_TAB } from "./storage";
 import { toJstIso } from "./time";
 
@@ -90,17 +91,8 @@ export async function listLocations(auth: OAuth2Client, spreadsheetId: string): 
   return parseLocationRows((data.values ?? []) as unknown[][]);
 }
 
-/*
- * 同じインスタンス内で「重複確認→追記」が同時に走り、同じ名前が2行できるのを防ぐ。
- * 複数インスタンスにまたがる同時登録までは防げないが、利用者が1人の現段階では十分とする。
- */
-let createQueue: Promise<unknown> = Promise.resolve();
-
-function serialized<T>(task: () => Promise<T>): Promise<T> {
-  const run = createQueue.then(task, task);
-  createQueue = run.catch(() => undefined);
-  return run;
-}
+// 同じ名前の場所が2行できないよう、登録は1件ずつ行う
+const serialized = createSerialQueue();
 
 export function createLocation(
   auth: OAuth2Client,

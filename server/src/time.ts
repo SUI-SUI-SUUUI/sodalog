@@ -8,3 +8,10 @@ export function toJstIso(date: Date): string {
   const jst = new Date(date.getTime() + JST_OFFSET_MS);
   return jst.toISOString().replace(/\.\d{3}Z$/, "+09:00");
 }
+
+/**
+ * 日本時間の今日の日付(例: 2026-09-25)。作業日の上限の判定に使う。
+ */
+export function todayJst(now: Date = new Date()): string {
+  return toJstIso(now).slice(0, 10);
+}

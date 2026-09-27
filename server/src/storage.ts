@@ -3,6 +3,7 @@
  *
  * STEP 4-1: 初回セットアップ(フォルダ・スプレッドシート・「記録」タブ)
  * STEP 4-2: 「場所」タブの追加と、API用の保存先の参照(読み取りのみ)
+ * STEP 4-3: 「写真」フォルダの追加と、写真を年ごとに分けるフォルダ(写真/<年>/)
  *
  * 作成したファイルはDriveのappPropertiesで見分けるため、IDをどこにも保存せずに毎回探せる。
  * 何度呼んでも1組だけになるよう、既存があればそれを返す。
@@ -16,6 +17,7 @@ import { connectWithStoredToken, describeGoogleError, type GoogleConfig } from "
 import { asyncHandler, requireAdmin, requireGoogleConfig } from "./http";
 
 const FOLDER_MIME = "application/vnd.google-apps.folder";
+const PHOTOS_FOLDER_NAME = "写真";
 const SPREADSHEET_MIME = "application/vnd.google-apps.spreadsheet";
 
 // スキーマ1 = 「記録」タブ + 「場所」タブ(テスト用保存先にまだデータが無いため、4-2で定義を広げた)
@@ -92,11 +94,15 @@ function appPropertiesQuery(appProperties: Record<string, string>, mimeType: str
   return [...conditions, `mimeType='${mimeType}'`, "trashed=false"].join(" and ");
 }
 
+function photosFolderAppProperties(env: StorageEnv): Record<string, string> {
+  return { sodalogStorage: env, sodalogKind: "photos" };
+}
+
 /**
  * appPropertiesがすべて一致するファイルを探す。
  * 2件以上見つかった場合は、どれが正しいか決められないためエラーにする。
  */
-async function findFile(
+export async function findFile(
   driveApi: drive_v3.Drive,
   appProperties: Record<string, string>,
   mimeType: string
@@ -254,14 +260,20 @@ export async function setupStorage(auth: OAuth2Client, env: StorageEnv) {
     parents: [folder.id],
   });
   const tabs = await ensureTabs(sheetsApi, spreadsheet.id);
+  const photosFolder = await ensureFile(driveApi, photosFolderAppProperties(env), {
+    name: PHOTOS_FOLDER_NAME,
+    mimeType: FOLDER_MIME,
+    parents: [folder.id],
+  });
 
   // 同じインスタンスのAPIが古い参照を使わないよう、セットアップ後はキャッシュを捨てる
   resolvedStorage.delete(env);
+  photoYearFolders.clear();
 
-  return { env, schemaVersion: SCHEMA_VERSION, folder, spreadsheet, tabs };
+  return { env, schemaVersion: SCHEMA_VERSION, folder, spreadsheet, photosFolder, tabs };
 }
 
-export type ResolvedStorage = { spreadsheetId: string };
+export type ResolvedStorage = { spreadsheetId: string; photosFolderId: string };
 
 const RESOLVE_CACHE_MS = 10 * 60 * 1000;
 const resolvedStorage = new Map<StorageEnv, ResolvedStorage & { resolvedAt: number }>();
@@ -273,7 +285,7 @@ const resolvedStorage = new Map<StorageEnv, ResolvedStorage & { resolvedAt: numb
 export async function resolveStorage(auth: OAuth2Client, env: StorageEnv): Promise<ResolvedStorage> {
   const cached = resolvedStorage.get(env);
   if (cached && Date.now() - cached.resolvedAt < RESOLVE_CACHE_MS) {
-    return { spreadsheetId: cached.spreadsheetId };
+    return { spreadsheetId: cached.spreadsheetId, photosFolderId: cached.photosFolderId };
   }
 
   const driveApi = drive({ version: "v3", auth });
@@ -282,6 +294,10 @@ export async function resolveStorage(auth: OAuth2Client, env: StorageEnv): Promi
   const spreadsheetId = await findFile(driveApi, recordsAppProperties(env), SPREADSHEET_MIME);
   if (!spreadsheetId) {
     throw new StorageError("storage_not_initialized", "保存先がまだセットアップされていません");
+  }
+  const photosFolderId = await findFile(driveApi, photosFolderAppProperties(env), FOLDER_MIME);
+  if (!photosFolderId) {
+    throw new StorageError("storage_not_initialized", "「写真」フォルダがありません。セットアップを実行してください");
   }
 
   let headers;
@@ -306,8 +322,35 @@ export async function resolveStorage(auth: OAuth2Client, env: StorageEnv): Promi
     }
   }
 
-  resolvedStorage.set(env, { spreadsheetId, resolvedAt: Date.now() });
-  return { spreadsheetId };
+  resolvedStorage.set(env, { spreadsheetId, photosFolderId, resolvedAt: Date.now() });
+  return { spreadsheetId, photosFolderId };
+}
+
+// 年フォルダのID(キーは "env:年")。フォルダは消さない前提のため、インスタンス内で覚えておく
+const photoYearFolders = new Map<string, string>();
+
+/**
+ * 写真を入れる年ごとのフォルダ(写真/<年>/)を返す。無ければ作る。
+ * 年は作業日の年。同時に作られないよう、呼び出し側で1件ずつ処理すること。
+ */
+export async function ensurePhotoYearFolder(
+  auth: OAuth2Client,
+  env: StorageEnv,
+  photosFolderId: string,
+  year: string
+): Promise<string> {
+  const key = `${env}:${year}`;
+  const cached = photoYearFolders.get(key);
+  if (cached) {
+    return cached;
+  }
+  const folder = await ensureFile(
+    drive({ version: "v3", auth }),
+    { sodalogStorage: env, sodalogKind: "photoYear", year },
+    { name: year, mimeType: FOLDER_MIME, parents: [photosFolderId] }
+  );
+  photoYearFolders.set(key, folder.id);
+  return folder.id;
 }
 
 export function createStorageRouter(config: GoogleConfig | null): Router {

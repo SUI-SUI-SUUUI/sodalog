@@ -1,5 +1,5 @@
 /*
- * LIFFから呼ぶAPI(STEP 4-2: 場所の一覧取得・登録)。
+ * LIFFから呼ぶAPI(STEP 4-2: 場所の一覧取得・登録、STEP 4-3a: 記録の保存)。
  *
  * - 本人確認: Authorization: Bearer <LIFFのIDトークン>(クライアントのユーザーIDは信用しない)
  * - CORS: GitHub PagesのLIFF配信元だけを許可する
@@ -10,7 +10,14 @@ import { describeGoogleError, getApiClient, isGoogleAuthError, type GoogleConfig
 import { asyncHandler } from "./http";
 import { requireLiffUser } from "./liffAuth";
 import { createLocation, listLocations, normalizeLocationName } from "./locations";
+import { saveRecord, UnknownLocationError, validateRecordInput } from "./records";
 import { isStorageEnv, resolveStorage, StorageError, type StorageEnv } from "./storage";
+import { todayJst } from "./time";
+
+// 場所APIなど、写真を含まないAPIの本文の上限
+const SMALL_JSON_LIMIT = "8kb";
+// 記録APIの本文の上限。写真(復号後3MBまで)はbase64で約1.33倍(約4MB)になるため、余裕を持たせる
+const RECORD_JSON_LIMIT = "5mb";
 
 type ApiConfig = {
   lineLoginChannelId: string;
@@ -81,8 +88,10 @@ export function createApiRouter(googleConfig: GoogleConfig | null): Router {
   if (apiConfig) {
     router.use(requireLiffUser(apiConfig.lineLoginChannelId, apiConfig.allowedLineUserId));
   }
-  // Webhookの署名検証は生のボディが必要なため、JSONの解析は/api配下だけで行う
-  router.use(express.json({ limit: "8kb" }));
+  // Webhookの署名検証は生のボディが必要なため、JSONの解析は/api配下だけで行う。
+  // 上限はAPIごとに分け、写真を送る記録APIだけ大きくする
+  const smallJson = express.json({ limit: SMALL_JSON_LIMIT });
+  const recordJson = express.json({ limit: RECORD_JSON_LIMIT });
 
   async function getStorageContext(res: Response) {
     const client = await getApiClient(googleConfig!);
@@ -91,7 +100,12 @@ export function createApiRouter(googleConfig: GoogleConfig | null): Router {
       return null;
     }
     const storage = await resolveStorage(client, apiConfig!.storageEnv);
-    return { client, spreadsheetId: storage.spreadsheetId };
+    return {
+      client,
+      env: apiConfig!.storageEnv,
+      spreadsheetId: storage.spreadsheetId,
+      photosFolderId: storage.photosFolderId,
+    };
   }
 
   router.get(
@@ -108,6 +122,7 @@ export function createApiRouter(googleConfig: GoogleConfig | null): Router {
 
   router.post(
     "/locations",
+    smallJson,
     asyncHandler(async (req, res) => {
       const validation = normalizeLocationName((req.body as { name?: unknown } | undefined)?.name);
       if (!validation.ok) {
@@ -123,6 +138,37 @@ export function createApiRouter(googleConfig: GoogleConfig | null): Router {
     })
   );
 
+  router.post(
+    "/records",
+    recordJson,
+    asyncHandler(async (req, res) => {
+      const validation = validateRecordInput(req.body, todayJst());
+      if (!validation.ok) {
+        if (validation.error === "photo_too_large") {
+          res.status(413).json({ error: "photo_too_large" });
+          return;
+        }
+        const { ok: _ok, ...body } = validation;
+        res.status(400).json(body);
+        return;
+      }
+      const context = await getStorageContext(res);
+      if (!context) {
+        return;
+      }
+      const result = await saveRecord(
+        {
+          auth: context.client,
+          env: context.env,
+          spreadsheetId: context.spreadsheetId,
+          photosFolderId: context.photosFolderId,
+        },
+        validation.input
+      );
+      res.status(result.created ? 201 : 200).json(result);
+    })
+  );
+
   router.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
     const type = (err as { type?: string }).type;
     if (type === "entity.parse.failed") {
@@ -131,6 +177,10 @@ export function createApiRouter(googleConfig: GoogleConfig | null): Router {
     }
     if (type === "entity.too.large") {
       res.status(413).json({ error: "payload_too_large" });
+      return;
+    }
+    if (err instanceof UnknownLocationError) {
+      res.status(400).json({ error: "unknown_location" });
       return;
     }
     if (err instanceof StorageError) {
