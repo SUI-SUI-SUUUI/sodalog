@@ -9,7 +9,7 @@ import express, { Router, type NextFunction, type Request, type RequestHandler, 
 import { describeGoogleError, getApiClient, isGoogleAuthError, type GoogleConfig } from "./google";
 import { asyncHandler } from "./http";
 import { requireLiffUser } from "./liffAuth";
-import { buildAlbum, parseYear } from "./album";
+import { buildAlbum, countRecordsByLocation, parseYear } from "./album";
 import { createLocation, listLocations, normalizeLocationName } from "./locations";
 import { getPhoto, isValidFileId, parsePhotoSize, PhotoNotFoundError } from "./photos";
 import { readRecordRows, saveRecord, UnknownLocationError, validateRecordInput } from "./records";
@@ -111,15 +111,28 @@ export function createApiRouter(googleConfig: GoogleConfig | null): Router {
     };
   }
 
+  // ?include=counts のときだけ、各場所の総記録数(recordCount)を付ける(アルバム側の場所タイル用)。
+  // 付けないときの応答・処理はこれまでと同じ(「記録」タブも読まない)
   router.get(
     "/locations",
-    asyncHandler(async (_req, res) => {
+    asyncHandler(async (req, res) => {
       const context = await getStorageContext(res);
       if (!context) {
         return;
       }
-      const locations = await listLocations(context.client, context.spreadsheetId);
-      res.json({ locations });
+      if (req.query.include !== "counts") {
+        const locations = await listLocations(context.client, context.spreadsheetId);
+        res.json({ locations });
+        return;
+      }
+      const [locations, rows] = await Promise.all([
+        listLocations(context.client, context.spreadsheetId),
+        readRecordRows(context.client, context.spreadsheetId),
+      ]);
+      const counts = countRecordsByLocation(rows);
+      res.json({
+        locations: locations.map((location) => ({ ...location, recordCount: counts.get(location.id) ?? 0 })),
+      });
     })
   );
 

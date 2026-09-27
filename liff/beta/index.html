@@ -47,6 +47,8 @@
 
       h1 { margin: 0 0 6px; font-size: 22px; text-align: center; }
 
+      #pickerScreen { position: relative; }
+
       .description { margin: 0 0 18px; color: var(--muted); text-align: center; line-height: 1.6; }
 
       .hidden { display: none !important; }
@@ -97,6 +99,11 @@
       .tile.size-m { font-size: 18px; }
 
       .tile.size-s { font-size: 16px; }
+
+      /* アルバム側のタイルだけ、場所名の下に総記録数を小さく出す */
+      .tile.with-count { flex-direction: column; gap: 4px; }
+
+      .tile .tile-count { color: rgba(31, 51, 35, .62); font-size: 12px; font-weight: 700; }
 
       /* 「＋ 場所を追加」は場所タイルと区別した控えめなボタン */
       .add-button {
@@ -154,7 +161,8 @@
        * 場所の色(--c-*)は場所ごとに JS で body に設定する(TONES)。ライトモードのみ。
        * 古いiPhoneのLINE内ブラウザでも動くよう :has() は使わず、状態はクラスで切り替える。
        */
-      body.recording { padding: 0; background: var(--c-bg); }
+      /* 記録画面・アルバム画面を開いている間は、ページ全体を場所色にする */
+      body.toned { padding: 0; background: var(--c-bg); }
 
       .record-screen { color: #26303a; }
 
@@ -401,7 +409,7 @@
       }
 
       /* ---- 作業日のカレンダー(画面の下から出るシート) ---- */
-      html.cal-open, html.cal-open body { overflow: hidden; }
+      html.sheet-open, html.sheet-open body { overflow: hidden; }
 
       .cal-overlay {
         position: fixed;
@@ -501,13 +509,270 @@
       .cal-actions .cancel { border: 1px solid #cfd5dc; background: #fff; color: #3a4450; }
 
       .cal-actions .ok { border: 0; background: var(--c-strong); color: #fff; }
+
+      /*
+       * ---- 3機能のナビゲーション(docs/design/navigation-board.html Round 3 を確定版として反映) ----
+       * 左から「アルバム → 記録する → 相談」を丸アイコンと線でつなぐ(考え方は 過去 → 今 → 次。文字では出さない)。
+       * 選択中だけ色つき＋緑の太い輪、ほかは少し色を落とす。相談は準備中(白黒・点線の輪)で、押すと案内だけを出す。
+       * アイコンは icons/ の正方形・背景透過PNG(128px)。色はリッチメニューの緑にそろえる。
+       */
+      .flow-nav { position: relative; display: grid; grid-template-columns: 1fr 1fr 1fr; margin: 0 0 14px; }
+
+      /* 丸の中心どうしをつなぐ線(相談へは点線＝まだ先の機能) */
+      .flow-nav::before,
+      .flow-nav::after { content: ""; position: absolute; top: 31px; width: 33.3%; }
+
+      .flow-nav::before { left: 16.7%; height: 2px; background: #d7dbe0; }
+
+      .flow-nav::after { left: 50%; height: 0; border-top: 2px dashed #d7dbe0; }
+
+      .flow-nav button {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        min-height: 64px;
+        padding: 1px 2px;
+        border: 0;
+        background: none;
+        color: #5f6873;
+        font: inherit;
+        line-height: 1.25;
+        cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      .flow-icon {
+        display: block;
+        width: 60px;
+        height: 60px;
+        border: 2px solid #d7dbe0;
+        border-radius: 50%;
+        background: #fff;
+        overflow: hidden;
+        -webkit-filter: saturate(.55) opacity(.8);
+        filter: saturate(.55) opacity(.8);
+      }
+
+      .flow-icon img { display: block; width: 100%; height: 100%; }
+
+      .flow-name { margin-top: 3px; font-size: 13px; font-weight: 700; }
+
+      .flow-nav button[aria-pressed="true"] { color: #3f6b45; }
+
+      .flow-nav button[aria-pressed="true"] .flow-icon { border: 3px solid #3f6b45; box-shadow: 0 0 0 3px #e6efe5; -webkit-filter: none; filter: none; }
+
+      .flow-nav button[aria-pressed="true"] .flow-name { font-weight: 800; }
+
+      .flow-nav button.coming { color: #9aa2ab; }
+
+      .flow-nav button.coming .flow-icon { border-style: dashed; -webkit-filter: grayscale(1) opacity(.5); filter: grayscale(1) opacity(.5); }
+
+      /* 「準備中」は丸の下の縁に重ねて、ナビゲーションの高さを増やさない */
+      .flow-soon { position: absolute; top: 48px; left: 50%; padding: 1px 6px; border: 1px solid #fff; border-radius: 999px; background: #eef0f3; color: #5f6873; font-size: 10px; font-weight: 700; white-space: nowrap; transform: translateX(-50%); }
+
+      /* 相談を押したときの案内(画面は変えない) */
+      .consult-note { position: absolute; left: 16px; right: 16px; z-index: 30; padding: 12px 14px; border: 1px solid #d7dbe0; border-radius: 14px; background: #fff; box-shadow: 0 8px 24px rgba(20, 28, 40, .16); color: #26303a; font-size: 14px; line-height: 1.6; text-align: left; }
+
+      .consult-note b { display: block; margin-bottom: 2px; }
+
+      .consult-note button { display: block; margin: 8px 0 0 auto; padding: 6px 12px; border: 0; border-radius: 8px; background: #eef0f3; color: #26303a; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+
+      /*
+       * ---- アルバム画面(docs/design/album-screen-board.html の Round 3 を確定版として反映) ----
+       * 場所ごとに振り返る。場所色の帯に場所名・件数・年ボタン、写真は正方形タイルを横に並べ(左が過去・右が最新)、
+       * 写真なしの記録は表にする。:has()・inset・aspect-ratio は使わない。
+       */
+      .album-screen { position: relative; padding: 10px 0 calc(28px + env(safe-area-inset-bottom, 0px)); color: #26303a; }
+
+      .album-screen .flow-nav { margin: 0 16px; }
+
+      .album-band { margin-top: 12px; padding: 12px 16px 0; background: var(--c-band); }
+
+      .album-place-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+
+      .album-place {
+        flex: 1;
+        min-width: 0;
+        display: -webkit-box;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+        overflow: hidden;
+        color: var(--c-ink);
+        font-size: 19px;
+        font-weight: 700;
+        line-height: 1.35;
+        overflow-wrap: anywhere;
+      }
+
+      .album-place .count { margin-left: 8px; color: #5f6873; font-size: 14px; white-space: nowrap; }
+
+      /* 横スクロールする並び(年ボタン・写真・表)。指とトラックパッドはブラウザ標準、マウスは JS で送る */
+      .h-scroll {
+        overflow-x: auto;
+        overscroll-behavior-x: contain;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: thin;
+        scrollbar-color: var(--c-line) transparent;
+      }
+
+      .h-scroll::-webkit-scrollbar { height: 6px; }
+
+      .h-scroll::-webkit-scrollbar-thumb { border-radius: 3px; background: var(--c-line); }
+
+      .album-years { display: flex; gap: 8px; margin: 10px -16px 0; padding: 0 16px 12px; scrollbar-width: none; }
+
+      .album-years::-webkit-scrollbar { display: none; }
+
+      .album-years button { flex: none; min-width: 72px; height: 38px; padding: 0 14px; border: 1px solid var(--c-line); border-radius: 999px; background: #fff; color: #26303a; font: inherit; font-size: 15px; font-weight: 700; cursor: pointer; }
+
+      .album-years button small { margin-left: 4px; color: #5f6873; font-size: 11px; }
+
+      .album-years button[aria-pressed="true"] { border-color: var(--c-strong); background: var(--c-strong); color: #fff; }
+
+      .album-years button[aria-pressed="true"] small { color: rgba(255, 255, 255, .8); }
+
+      .album-status { margin: 16px; padding: 12px; border-radius: 12px; background: var(--c-frame); color: var(--c-ink); font-size: 14px; line-height: 1.6; }
+
+      .album-status.error { background: var(--error-bg); color: var(--error-text); }
+
+      .album-status button { display: block; margin-top: 8px; padding: 8px 14px; border: 1px solid currentColor; border-radius: 10px; background: #fff; color: inherit; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
+
+      .section-label { display: flex; align-items: baseline; justify-content: space-between; margin: 18px 16px 8px; color: #5f6873; font-size: 12px; font-weight: 700; letter-spacing: .06em; }
+
+      .section-label small { font-weight: 400; letter-spacing: 0; }
+
+      .truncated-note { margin: 0 16px 8px; padding: 8px 10px; border-radius: 10px; background: var(--c-frame); color: var(--c-ink); font-size: 12px; line-height: 1.5; }
+
+      .album-empty { margin: 0 16px; padding: 18px 12px; border: 1.5px dashed var(--c-line); border-radius: 12px; color: #5f6873; font-size: 13px; text-align: center; }
+
+      /* 写真の横並び: 正方形タイル、幅は画面幅の62%(最大322px) */
+      .strip-wrap { position: relative; }
+
+      .strip { display: flex; gap: 10px; padding: 0 16px 10px; cursor: grab; -webkit-user-select: none; user-select: none; }
+
+      .strip.dragging { cursor: grabbing; }
+
+      .strip.dragging .ph { pointer-events: none; }
+
+      .strip-wrap::before,
+      .strip-wrap::after {
+        content: "";
+        position: absolute;
+        top: 0;
+        bottom: 10px;
+        z-index: 1;
+        width: 28px;
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity .2s;
+      }
+
+      .strip-wrap::before { left: 0; background: linear-gradient(90deg, var(--c-bg), rgba(255, 255, 255, 0)); }
+
+      .strip-wrap::after { right: 0; background: linear-gradient(270deg, var(--c-bg), rgba(255, 255, 255, 0)); }
+
+      .strip-wrap.more-left::before, .strip-wrap.more-right::after { opacity: 1; }
+
+      .ph {
+        position: relative;
+        flex: none;
+        width: 62vw;
+        max-width: 322px;
+        height: 62vw;
+        max-height: 322px;
+        padding: 0;
+        border: 0;
+        border-radius: 14px;
+        background: var(--c-frame); /* 読み込むまでは淡い場所色の枠 */
+        overflow: hidden;
+        cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      .ph img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity .25s; -webkit-user-drag: none; }
+
+      .ph img.loaded { opacity: 1; }
+
+      .ph .date { position: absolute; left: 8px; top: 8px; padding: 4px 9px; border-radius: 999px; background: rgba(255, 255, 255, .92); color: #26303a; font-size: 12px; font-weight: 700; }
+
+      .ph .info { position: absolute; right: 8px; bottom: 8px; display: flex; width: 30px; height: 30px; align-items: center; justify-content: center; border-radius: 50%; background: rgba(255, 255, 255, .92); color: var(--c-strong); box-shadow: 0 1px 3px rgba(0, 0, 0, .2); }
+
+      .ph .failed { position: absolute; top: 50%; left: 0; right: 0; color: #5f6873; font-size: 12px; text-align: center; transform: translateY(-50%); }
+
+      .scroll-hint { margin: 2px 16px 0; color: #5f6873; font-size: 11px; }
+
+      /* 写真なしの記録の表(新しい順、作業日の列を左端に固定) */
+      .album-table-wrap { margin: 0 16px; border: 1px solid var(--c-line); border-radius: 12px; background: #fff; }
+
+      .album-table-wrap table { min-width: 100%; border-collapse: separate; border-spacing: 0; font-size: 14px; }
+
+      .album-table-wrap th, .album-table-wrap td { padding: 9px 10px; border-bottom: 1px solid var(--c-line); text-align: left; vertical-align: top; }
+
+      .album-table-wrap tr:last-child td { border-bottom: 0; }
+
+      .album-table-wrap th { background: var(--c-band); color: var(--c-ink); font-size: 12px; white-space: nowrap; }
+
+      .album-table-wrap .date-col { position: -webkit-sticky; position: sticky; left: 0; z-index: 1; background: #fff; font-weight: 700; white-space: nowrap; box-shadow: 1px 0 0 var(--c-line); }
+
+      .album-table-wrap th.date-col { z-index: 2; background: var(--c-band); }
+
+      .album-table-wrap .works div { white-space: nowrap; }
+
+      .album-table-wrap .tags-col { min-width: 110px; }
+
+      .album-table-wrap .memo-col { min-width: 200px; max-width: 240px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+      .album-table-wrap .none, .detail-list .none { color: #b0b6bd; }
+
+      /* 記録の詳細(画面の下から出るシート。作業日のカレンダーと同じ作り) */
+      .detail-overlay { position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 40; display: flex; align-items: flex-end; justify-content: center; background: rgba(20, 28, 40, .45); color: #26303a; }
+
+      .detail-sheet { width: 100%; max-width: 520px; max-height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 12px 16px calc(18px + env(safe-area-inset-bottom, 0px)); border-radius: 20px 20px 0 0; background: #fff; }
+
+      .detail-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+
+      .detail-top b { font-size: 17px; }
+
+      .detail-photo { position: relative; min-height: 200px; border-radius: 14px; background: var(--c-frame); overflow: hidden; }
+
+      .detail-photo img { display: block; width: 100%; max-height: 60vh; object-fit: contain; }
+
+      .detail-photo .hq { position: absolute; left: 8px; bottom: 8px; padding: 4px 8px; border-radius: 999px; background: rgba(38, 48, 58, .7); color: #fff; font-size: 11px; font-weight: 700; }
+
+      .detail-list { margin: 12px 0 0; }
+
+      .detail-list > div { display: flex; gap: 8px; padding: 9px 2px; border-bottom: 1px solid #edf0f3; font-size: 15px; line-height: 1.5; }
+
+      .detail-list > div:last-child { border-bottom: 0; }
+
+      .detail-list dt { flex: none; width: 76px; color: #5f6873; font-size: 13px; font-weight: 700; }
+
+      .detail-list dd { flex: 1; min-width: 0; margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
     </style>
   </head>
   <body>
     <main>
       <section id="pickerScreen" class="card">
-        <h1>場所を選ぶ</h1>
-        <p class="description">記録する場所を選んでください</p>
+        <nav class="flow-nav" aria-label="機能の切り替え">
+          <button type="button" data-mode="album" aria-pressed="false" aria-label="アルバム">
+            <span class="flow-icon"><img src="icons/nav-album.png" width="60" height="60" alt=""></span>
+            <span class="flow-name">アルバム</span>
+          </button>
+          <button type="button" data-mode="record" aria-pressed="true" aria-label="記録する">
+            <span class="flow-icon"><img src="icons/nav-record.png" width="60" height="60" alt=""></span>
+            <span class="flow-name">記録する</span>
+          </button>
+          <button type="button" data-mode="consult" class="coming" aria-pressed="false" aria-label="相談（準備中）">
+            <span class="flow-icon"><img src="icons/nav-consult.png" width="60" height="60" alt=""></span>
+            <span class="flow-name">相談</span>
+            <span class="flow-soon">準備中</span>
+          </button>
+        </nav>
+        <h1 id="pickerTitle">場所を選ぶ</h1>
+        <p id="pickerDescription" class="description">記録する場所を選んでください</p>
+        <p id="pickerNote" class="status hidden">まだ場所がありません。「記録する」から場所を登録してください。</p>
         <p id="status" class="status">読み込み中です。</p>
 
         <div id="collage" class="collage" aria-label="場所の一覧"></div>
@@ -587,6 +852,32 @@
             <button id="saveButton" class="save" type="button">保存する</button>
           </div>
         </div>
+      </section>
+
+      <section id="albumScreen" class="album-screen hidden">
+        <nav class="flow-nav" aria-label="機能の切り替え">
+          <button type="button" data-mode="album" aria-pressed="true" aria-label="アルバム">
+            <span class="flow-icon"><img src="icons/nav-album.png" width="60" height="60" alt=""></span>
+            <span class="flow-name">アルバム</span>
+          </button>
+          <button type="button" data-mode="record" aria-pressed="false" aria-label="記録する">
+            <span class="flow-icon"><img src="icons/nav-record.png" width="60" height="60" alt=""></span>
+            <span class="flow-name">記録する</span>
+          </button>
+          <button type="button" data-mode="consult" class="coming" aria-pressed="false" aria-label="相談（準備中）">
+            <span class="flow-icon"><img src="icons/nav-consult.png" width="60" height="60" alt=""></span>
+            <span class="flow-name">相談</span>
+            <span class="flow-soon">準備中</span>
+          </button>
+        </nav>
+        <div class="album-band">
+          <div class="album-place-row">
+            <div id="albumPlace" class="album-place"></div>
+            <button id="albumChangePlace" class="change-place" type="button">場所を変える</button>
+          </div>
+          <div id="albumYears" class="album-years h-scroll" role="group" aria-label="年"></div>
+        </div>
+        <div id="albumBody"></div>
       </section>
     </main>
 
@@ -746,8 +1037,17 @@
             }
             tile.style.background = colorFor(location.id);
             tile.textContent = location.name;
+            // 総記録数はアルバム側だけ(記録する側では出さない)
+            if (mode === "album" && locationCounts && locationCounts[location.id] !== undefined) {
+              tile.classList.add("with-count");
+              tile.append(el("span", "tile-count", locationCounts[location.id] + "件"));
+            }
             tile.addEventListener("click", function () {
-              openRecord(location, "");
+              if (mode === "album") {
+                openAlbum(location);
+              } else {
+                openRecord(location, "");
+              }
             });
             row.append(tile);
           });
@@ -756,9 +1056,63 @@
         });
 
         const isEmpty = locations.length === 0;
-        addButton.classList.toggle("hidden", isEmpty || !addForm.classList.contains("hidden"));
-        if (isEmpty) {
+        // 場所の登録は「記録する」側だけ。アルバム側で場所がなければ、そのことを知らせる
+        addButton.classList.toggle("hidden", isEmpty || mode === "album" || !addForm.classList.contains("hidden"));
+        document.getElementById("pickerNote").classList.toggle("hidden", !(isEmpty && mode === "album"));
+        if (isEmpty && mode === "record") {
           openAddForm(true);
+        }
+      }
+
+      // 「記録する / アルバム」の切り替え(場所を選ぶ画面の見出しと、タイルを押したときの行き先が変わる)
+      let mode = "record";
+
+      function setMode(next) {
+        mode = next;
+        document.querySelectorAll("[data-mode]").forEach(function (button) {
+          button.setAttribute("aria-pressed", String(button.dataset.mode === mode));
+        });
+        // 機能名はナビゲーションに出ているので、見出しはどちらも「場所を選ぶ」
+        document.getElementById("pickerTitle").textContent = "場所を選ぶ";
+        document.getElementById("pickerDescription").textContent =
+          mode === "album" ? "振り返る場所を選んでください" : "記録する場所を選んでください";
+        if (mode === "album") {
+          addForm.classList.add("hidden");
+          nameInput.value = "";
+          nameError.classList.add("hidden");
+          loadLocationCounts();
+        }
+        renderCollage();
+      }
+
+      /*
+       * アルバム側の場所タイルに出す総記録数。場所ごとに /api/album を呼ばず、
+       * 場所一覧API を ?include=counts で1回呼んで、全部の場所の件数をまとめて受け取る。
+       * 記録を保存したら取り直す(invalidateAlbum)。取れなくても、件数なしでタイルは使える。
+       */
+      let locationCounts = null;
+      let countsRequest = 0;
+
+      async function loadLocationCounts() {
+        if (locationCounts || (!liffReady && previewCount === null)) {
+          return;
+        }
+        const requestId = ++countsRequest;
+        try {
+          const data = await api("GET", "/api/locations?include=counts");
+          if (requestId !== countsRequest) {
+            return;
+          }
+          locationCounts = {};
+          (data.locations || []).forEach(function (location) {
+            locationCounts[location.id] = location.recordCount;
+          });
+          // 件数と一緒に届いた最新の場所一覧も反映する
+          setLocations((data.locations || []).map(function (location) {
+            return { id: location.id, name: location.name, createdAt: location.createdAt };
+          }));
+        } catch (error) {
+          console.error("記録数の取得エラー", error);
         }
       }
 
@@ -781,6 +1135,8 @@
 
       function showPicker() {
         recordScreen.classList.add("hidden");
+        document.getElementById("albumScreen").classList.add("hidden");
+        document.body.classList.remove("toned");
         pickerScreen.classList.remove("hidden");
         window.scrollTo({ top: 0 });
       }
@@ -904,7 +1260,25 @@
             logged.photo = "(base64 " + body.photo.data.length + "文字)";
           }
           console.log("プレビュー: 保存する内容", JSON.stringify(logged));
+          previewSaved.push(Object.assign({}, body, {
+            recordedAt: new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 19) + "+09:00",
+            photoFileId: body.photo ? "prevsaved_" + body.recordId : null,
+            photoData: body.photo ? "data:image/jpeg;base64," + body.photo.data : null,
+          }));
           return { created: true, record: body };
+        }
+        if (path.indexOf("/api/album") === 0) {
+          await new Promise(function (resolve) { setTimeout(resolve, 400); });
+          const query = new URLSearchParams(path.split("?")[1]);
+          return previewAlbum(query.get("locationId"), query.get("year"));
+        }
+        if (method === "GET" && path.indexOf("include=counts") !== -1) {
+          await new Promise(function (resolve) { setTimeout(resolve, 300); });
+          return {
+            locations: previewStore.map(function (location) {
+              return Object.assign({}, location, { recordCount: previewRecordsFor(location.id).length });
+            }),
+          };
         }
         if (method === "GET") {
           return { locations: previewStore.slice() };
@@ -918,8 +1292,112 @@
         return { location: location, created: true };
       }
 
+      // プレビュー: 場所ごとの見本の記録(決まった乱数で毎回同じ)と、このページで保存した記録
+      const previewSaved = [];
+      const previewRecordCache = {};
+
+      function previewRecordsFor(locationId) {
+        if (!previewRecordCache[locationId]) {
+          const index = previewStore.findIndex(function (l) { return l.id === locationId; });
+          let seed = 11 + index * 7;
+          const rand = function () { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+          const plants = ["アジサイ", "ホスタ", "バラ", "ミニトマト", "ラベンダー"];
+          const memos = ["", "", "つぼみが増えてきた。", "下の葉が少し黄色い。\n水やりの間隔を見直す。", "花がら摘み。", ""];
+          // 3件目の場所(玄関)は記録なし、それ以外は年ごとに数件ずつ
+          const plan = index === 2 ? {} : index % 2 === 0 ? { 2024: 5, 2025: 12, 2026: 10 } : { 2026: 4 };
+          const list = [];
+          Object.keys(plan).forEach(function (year) {
+            for (let i = 0; i < plan[year]; i++) {
+              const month = 1 + Math.floor(rand() * (year === "2026" ? 9 : 12));
+              const works = WORK_TYPES.filter(function () { return rand() < 0.15; });
+              const hasPhoto = rand() < 0.65;
+              list.push({
+                recordId: locationId + "-" + year + "-" + i,
+                workDate: year + "-" + String(month).padStart(2, "0") + "-" + String(1 + Math.floor(rand() * 27)).padStart(2, "0"),
+                recordedAt: year + "-01-01T" + String(Math.floor(rand() * 24)).padStart(2, "0") + ":00:00+09:00",
+                workTypes: works.length || hasPhoto ? works : ["水やり"],
+                plantTags: rand() < 0.4 ? [plants[Math.floor(rand() * plants.length)]] : [],
+                memo: memos[Math.floor(rand() * memos.length)],
+                photoFileId: hasPhoto ? "prev_" + (rand() < 0.4 ? "p" : "l") + "_" + locationId + "_" + year + "_" + i : null,
+              });
+            }
+          });
+          previewRecordCache[locationId] = list;
+        }
+        return previewRecordCache[locationId].concat(previewSaved.filter(function (r) { return r.locationId === locationId; }));
+      }
+
+      // サーバーの buildAlbum(server/src/album.ts)と同じ規則
+      function previewAlbum(locationId, yearParam) {
+        const location = previewStore.find(function (l) { return l.id === locationId; });
+        if (!location) {
+          throw new ApiError(404, "unknown_location");
+        }
+        const records = previewRecordsFor(locationId);
+        const counts = {};
+        records.forEach(function (r) { counts[r.workDate.slice(0, 4)] = (counts[r.workDate.slice(0, 4)] || 0) + 1; });
+        const years = Object.keys(counts).sort().map(function (y) { return { year: Number(y), count: counts[y] }; });
+        const year = yearParam ? Number(yearParam) : years.length ? years[years.length - 1].year : null;
+        const inYear = records.filter(function (r) { return Number(r.workDate.slice(0, 4)) === year; })
+          .sort(function (a, b) { return a.workDate !== b.workDate ? (a.workDate < b.workDate ? -1 : 1) : (a.recordedAt < b.recordedAt ? -1 : 1); });
+        const truncated = params.has("truncated");
+        return {
+          location: { id: location.id, name: location.name },
+          total: records.length,
+          years: years,
+          year: year,
+          photoRecords: inYear.filter(function (r) { return r.photoFileId; }),
+          textRecords: inYear.filter(function (r) { return !r.photoFileId; }).reverse(),
+          truncated: { photo: truncated, text: truncated },
+        };
+      }
+
+      // プレビュー: 見本の写真を描く(p=縦長、l=横長)。サムネイルは約0.8秒、元画像は約1.8秒で届く
+      async function previewPhoto(fileId, size) {
+        await new Promise(function (resolve) { setTimeout(resolve, size === "full" ? 1800 : 800); });
+        const saved = previewSaved.find(function (r) { return r.photoFileId === fileId; });
+        if (saved) {
+          return (await fetch(saved.photoData)).blob();
+        }
+        const longEdge = size === "full" ? 1000 : 480;
+        const portrait = fileId.indexOf("prev_p_") === 0;
+        const canvas = document.createElement("canvas");
+        canvas.width = portrait ? Math.round(longEdge * 0.75) : longEdge;
+        canvas.height = portrait ? longEdge : Math.round(longEdge * 0.75);
+        const g = canvas.getContext("2d");
+        let seed = fileId.length * 97 + fileId.charCodeAt(fileId.length - 1);
+        const rand = function () { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; };
+        const hue = 90 + Math.floor(rand() * 60);
+        const sky = g.createLinearGradient(0, 0, 0, canvas.height);
+        sky.addColorStop(0, "hsl(" + (hue + 60) + ", 35%, 86%)");
+        sky.addColorStop(1, "hsl(" + hue + ", 30%, 50%)");
+        g.fillStyle = sky;
+        g.fillRect(0, 0, canvas.width, canvas.height);
+        for (let i = 0; i < 40; i++) {
+          g.fillStyle = "hsl(" + (hue + (i % 3) * 8) + ", 38%, " + (30 + (i % 3) * 10) + "%)";
+          g.beginPath();
+          g.ellipse(rand() * canvas.width, canvas.height * (0.55 + rand() * 0.4), canvas.width * 0.12, canvas.width * 0.05, rand() * 3, 0, Math.PI * 2);
+          g.fill();
+        }
+        return new Promise(function (resolve) { canvas.toBlob(resolve, "image/jpeg", 0.85); });
+      }
+
       function api(method, path, body) {
         return previewCount !== null ? previewApi(method, path, body) : callApi(method, path, body);
+      }
+
+      // 写真の中身(IDトークンを付けてサーバーから取得する。Driveの共有設定は変えない)
+      async function fetchPhoto(fileId, size) {
+        if (previewCount !== null) {
+          return previewPhoto(fileId, size);
+        }
+        const response = await fetch(API_BASE + "/api/photos/" + encodeURIComponent(fileId) + "?size=" + size, {
+          headers: { Authorization: "Bearer " + liff.getIDToken() },
+        });
+        if (!response.ok) {
+          throw new ApiError(response.status, "photo_" + response.status);
+        }
+        return response.blob();
       }
 
       // ---- 読み込み・登録 ----
@@ -928,6 +1406,9 @@
           const data = await api("GET", "/api/locations");
           setStatus("");
           setLocations(data.locations || []);
+          if (mode === "album") {
+            loadLocationCounts();
+          }
         } catch (error) {
           console.error("場所の取得エラー", error);
           setStatus(messageFor(error), true, refreshLocations);
@@ -1253,7 +1734,7 @@
 
         pickerScreen.classList.add("hidden");
         recordScreen.classList.remove("hidden");
-        document.body.classList.add("recording");
+        document.body.classList.add("toned");
         window.scrollTo(0, 0);
       }
 
@@ -1290,7 +1771,7 @@
           '<button class="ok" type="button" data-cal-ok>この日にする</button></div>' +
           "</div>";
         document.body.append(overlay);
-        document.documentElement.classList.add("cal-open");
+        document.documentElement.classList.add("sheet-open");
 
         function render() {
           const parts = view.split("-").map(Number);
@@ -1351,7 +1832,7 @@
 
         function close() {
           overlay.remove();
-          document.documentElement.classList.remove("cal-open");
+          document.documentElement.classList.remove("sheet-open");
           document.removeEventListener("keydown", onKey);
           opener.focus({ preventScroll: true });
         }
@@ -1510,7 +1991,7 @@
 
       function leaveRecord() {
         setPhoto(null);
-        document.body.classList.remove("recording");
+        document.body.classList.remove("toned");
         showPicker();
       }
 
@@ -1552,6 +2033,7 @@
         updateSaveState();
         try {
           await api("POST", "/api/records", body);
+          invalidateAlbum(record.location.id);
           const placeName = record.location.name;
           record.pendingRecordId = null;
           record.saving = false;
@@ -1627,6 +2109,506 @@
         }
         leaveRecord();
       });
+
+      // ---- アルバム(STEP 4-4b。docs/design/album-screen-board.html Round 3 の確定版) ----
+      const albumScreen = document.getElementById("albumScreen");
+      const albumBody = document.getElementById("albumBody");
+      const ALBUM_PHOTO_PARALLEL = 4; // 一覧の写真は、見えてきたものから同時に4枚まで読み込む
+      const album = {
+        location: null,
+        cache: {},        // "場所ID|年"(年を省略したときは "場所ID|") → API の応答
+        request: 0,       // 古い応答で画面を上書きしないための番号
+        observer: null,
+        queue: [],
+        running: 0,
+      };
+      const thumbUrls = {}; // 写真ファイルID → 読み込んだサムネイル(同じ画面を開いている間は使い回す)
+
+      const INFO_ICON =
+        '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">' +
+        '<circle cx="12" cy="12" r="9.5"/><path d="M12 11v6"/><circle cx="12" cy="7.6" r="0.6" fill="currentColor"/></svg>';
+
+      function el(tag, className, text) {
+        const node = document.createElement(tag);
+        if (className) {
+          node.className = className;
+        }
+        if (text !== undefined) {
+          node.textContent = text;
+        }
+        return node;
+      }
+
+      function slashDate(iso) {
+        return iso.replace(/-/g, "/");
+      }
+
+      function hasDetail(record) {
+        return record.workTypes.length > 0 || record.plantTags.length > 0 || record.memo !== "";
+      }
+
+      // 記録を保存したら、その場所のアルバムは次に開いたときに取り直す
+      function invalidateAlbum(locationId) {
+        locationCounts = null;
+        countsRequest++;
+        Object.keys(album.cache).forEach(function (key) {
+          if (key.indexOf(locationId + "|") === 0) {
+            delete album.cache[key];
+          }
+        });
+      }
+
+      /*
+       * 横スクロール: 指スワイプ・トラックパッドの横スワイプはブラウザ標準のまま。
+       * マウスはホイール(縦の回転を横送りに。端まで来たら画面の縦スクロールに戻す)とドラッグで送る。
+       */
+      function enableHorizontalScroll(element, wrap) {
+        function updateFade() {
+          if (wrap) {
+            const max = element.scrollWidth - element.clientWidth;
+            wrap.classList.toggle("more-left", element.scrollLeft > 2);
+            wrap.classList.toggle("more-right", element.scrollLeft < max - 2);
+          }
+        }
+        element.addEventListener("wheel", function (event) {
+          if (event.ctrlKey || event.metaKey) {
+            return;
+          }
+          const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+          const max = element.scrollWidth - element.clientWidth;
+          if (!delta || max <= 0 || (delta < 0 && element.scrollLeft <= 0) || (delta > 0 && element.scrollLeft >= max - 1)) {
+            return;
+          }
+          event.preventDefault();
+          element.scrollLeft += delta;
+        }, { passive: false });
+
+        let startX = 0;
+        let startLeft = 0;
+        let dragging = false;
+        let moved = false;
+        element.addEventListener("pointerdown", function (event) {
+          if (event.pointerType !== "mouse" || event.button !== 0) {
+            return;
+          }
+          dragging = true;
+          moved = false;
+          startX = event.clientX;
+          startLeft = element.scrollLeft;
+        });
+        window.addEventListener("pointermove", function (event) {
+          if (!dragging) {
+            return;
+          }
+          const distance = event.clientX - startX;
+          if (!moved && Math.abs(distance) > 4) {
+            moved = true;
+            element.classList.add("dragging");
+          }
+          if (moved) {
+            element.scrollLeft = startLeft - distance;
+          }
+        });
+        window.addEventListener("pointerup", function () {
+          if (!dragging) {
+            return;
+          }
+          dragging = false;
+          element.classList.remove("dragging");
+          if (moved) {
+            // ドラッグで送ったときは、写真を押したことにしない
+            element.suppressClick = true;
+            setTimeout(function () { element.suppressClick = false; }, 0);
+          }
+        });
+        element.addEventListener("click", function (event) {
+          if (element.suppressClick) {
+            event.stopPropagation();
+            event.preventDefault();
+          }
+        }, true);
+        element.addEventListener("scroll", updateFade, { passive: true });
+        updateFade();
+      }
+
+      // ---- 一覧の写真の読み込み(見えてきたものから順に、同時に ALBUM_PHOTO_PARALLEL 枚まで) ----
+      function pumpPhotos() {
+        while (album.running < ALBUM_PHOTO_PARALLEL && album.queue.length) {
+          const job = album.queue.shift();
+          if (!job.tile.isConnected) {
+            continue;
+          }
+          album.running++;
+          fetchPhoto(job.fileId, "thumb")
+            .then(function (blob) {
+              thumbUrls[job.fileId] = URL.createObjectURL(blob);
+              showThumb(job.tile, job.fileId);
+            })
+            .catch(function (error) {
+              console.error("写真の読み込みエラー", error);
+              if (job.tile.isConnected && !job.tile.querySelector(".failed")) {
+                job.tile.append(el("span", "failed", "写真を読み込めませんでした"));
+              }
+            })
+            .then(function () {
+              album.running--;
+              pumpPhotos();
+            });
+        }
+      }
+
+      function showThumb(tile, fileId) {
+        const img = tile.querySelector("img");
+        img.onload = function () { img.classList.add("loaded"); };
+        img.src = thumbUrls[fileId];
+      }
+
+      function watchStrip(strip) {
+        if (album.observer) {
+          album.observer.disconnect();
+        }
+        album.queue = [];
+        if (!("IntersectionObserver" in window)) {
+          // 見えているかを判定できない古いブラウザでは、順番に全部読み込む
+          strip.querySelectorAll(".ph").forEach(function (tile) {
+            album.queue.push({ tile: tile, fileId: tile.dataset.fileId });
+          });
+          pumpPhotos();
+          return;
+        }
+        album.observer = new IntersectionObserver(function (entries) {
+          entries.forEach(function (entry) {
+            if (!entry.isIntersecting) {
+              return;
+            }
+            album.observer.unobserve(entry.target);
+            const fileId = entry.target.dataset.fileId;
+            if (thumbUrls[fileId]) {
+              showThumb(entry.target, fileId);
+            } else {
+              album.queue.push({ tile: entry.target, fileId: fileId });
+              pumpPhotos();
+            }
+          });
+        }, { root: strip, rootMargin: "0px 120px" });
+        strip.querySelectorAll(".ph").forEach(function (tile) { album.observer.observe(tile); });
+      }
+
+      // ---- 記録の詳細(先にサムネイルを表示し、元画像が届いたら差し替える) ----
+      function openAlbumDetail(record) {
+        if (document.querySelector(".detail-overlay")) {
+          return;
+        }
+        const overlay = el("div", "detail-overlay");
+        const sheet = el("div", "detail-sheet");
+        sheet.setAttribute("role", "dialog");
+        sheet.setAttribute("aria-modal", "true");
+        sheet.setAttribute("aria-label", "記録の詳細");
+        const top = el("div", "detail-top");
+        top.append(el("b", "", "記録の詳細"));
+        const close = el("button", "cal-close");
+        close.type = "button";
+        close.innerHTML = '<span aria-hidden="true">×</span>閉じる';
+        top.append(close);
+        sheet.append(top);
+
+        let fullUrl = null;
+        if (record.photoFileId) {
+          const box = el("div", "detail-photo");
+          const img = el("img");
+          img.alt = slashDate(record.workDate) + " の写真";
+          if (thumbUrls[record.photoFileId]) {
+            img.src = thumbUrls[record.photoFileId];
+          }
+          const hq = el("span", "hq", "高画質を読み込み中…");
+          box.append(img, hq);
+          sheet.append(box);
+          fetchPhoto(record.photoFileId, "full")
+            .then(function (blob) {
+              if (!overlay.isConnected) {
+                return;
+              }
+              fullUrl = URL.createObjectURL(blob);
+              img.src = fullUrl;
+              hq.remove();
+            })
+            .catch(function (error) {
+              console.error("元画像の読み込みエラー", error);
+              hq.textContent = img.getAttribute("src") ? "高画質を読み込めませんでした" : "写真を読み込めませんでした";
+            });
+        }
+
+        const list = el("dl", "detail-list");
+        function row(label, value) {
+          const item = el("div");
+          item.append(el("dt", "", label));
+          const dd = el("dd");
+          if (Array.isArray(value) && value.length) {
+            value.forEach(function (v) { dd.append(el("div", "", v)); });
+          } else if (!Array.isArray(value) && value) {
+            dd.textContent = value;
+          } else {
+            dd.append(el("span", "none", "なし"));
+          }
+          item.append(dd);
+          list.append(item);
+        }
+        row("作業日", slashDate(record.workDate));
+        row("作業内容", record.workTypes);
+        row("植物", record.plantTags.join("、"));
+        row("メモ", record.memo);
+        sheet.append(list);
+        overlay.append(sheet);
+        document.body.append(overlay);
+        document.documentElement.classList.add("sheet-open");
+
+        function hide() {
+          overlay.remove();
+          document.documentElement.classList.remove("sheet-open");
+          document.removeEventListener("keydown", onKey);
+          if (fullUrl) {
+            URL.revokeObjectURL(fullUrl);
+          }
+        }
+        function onKey(event) {
+          if (event.key === "Escape") {
+            hide();
+          }
+        }
+        close.addEventListener("click", hide);
+        overlay.addEventListener("click", function (event) {
+          if (event.target === overlay) {
+            hide();
+          }
+        });
+        document.addEventListener("keydown", onKey);
+        close.focus({ preventScroll: true });
+      }
+
+      // ---- 画面の組み立て ----
+      function renderYears(data) {
+        const container = document.getElementById("albumYears");
+        container.replaceChildren();
+        data.years.forEach(function (item) {
+          const button = el("button", "", String(item.year));
+          button.type = "button";
+          button.append(el("small", "", item.count + "件"));
+          button.setAttribute("aria-pressed", String(item.year === data.year));
+          button.addEventListener("click", function () {
+            if (item.year !== data.year) {
+              loadAlbum(item.year);
+            }
+          });
+          container.append(button);
+        });
+        // 左が過去・右が最新。右端(最新)が見える位置から(画面に追加済みなので、すぐに位置を決められる)
+        container.scrollLeft = container.scrollWidth;
+      }
+
+      function renderPhotos(data) {
+        const label = el("div", "section-label", "写真");
+        label.append(el("small", "", data.photoRecords.length + "枚・右が最新"));
+        albumBody.append(label);
+        if (data.truncated.photo) {
+          albumBody.append(el("p", "truncated-note", "この年は写真が多いため、新しい300件だけを表示しています。"));
+        }
+        if (!data.photoRecords.length) {
+          albumBody.append(el("p", "album-empty", "この年の写真はありません"));
+          return;
+        }
+        const wrap = el("div", "strip-wrap");
+        const strip = el("div", "strip h-scroll");
+        strip.setAttribute("aria-label", "写真の一覧（左が過去、右が最新）");
+        data.photoRecords.forEach(function (record) {
+          const tile = el("button", "ph");
+          tile.type = "button";
+          tile.dataset.fileId = record.photoFileId;
+          tile.setAttribute("aria-label", slashDate(record.workDate) + " の写真" + (hasDetail(record) ? "（詳細あり）" : ""));
+          const img = el("img");
+          img.alt = "";
+          img.draggable = false;
+          tile.append(img, el("span", "date", record.workDate.slice(5).replace("-", "/")));
+          if (hasDetail(record)) {
+            const info = el("span", "info");
+            info.innerHTML = INFO_ICON;
+            tile.append(info);
+          }
+          // 写真のどこを押しても詳細を開く
+          tile.addEventListener("click", function () { openAlbumDetail(record); });
+          strip.append(tile);
+        });
+        wrap.append(strip);
+        albumBody.append(wrap, el("p", "scroll-hint", "← 左が過去　右が最新 →"));
+        // 開いた直後・年を変えたときは右端(最新)から。そのあとで、見えている写真から読み込む
+        strip.scrollLeft = strip.scrollWidth;
+        enableHorizontalScroll(strip, wrap);
+        watchStrip(strip);
+      }
+
+      function renderTextTable(data) {
+        const label = el("div", "section-label", "写真なしの記録");
+        label.append(el("small", "", data.textRecords.length + "件・上が最新"));
+        albumBody.append(label);
+        if (data.truncated.text) {
+          albumBody.append(el("p", "truncated-note", "この年は写真なしの記録が多いため、新しい300件だけを表示しています。"));
+        }
+        if (!data.textRecords.length) {
+          albumBody.append(el("p", "album-empty", "この年の写真なしの記録はありません"));
+          return;
+        }
+        const wrap = el("div", "album-table-wrap h-scroll");
+        const table = el("table");
+        table.innerHTML = '<thead><tr><th class="date-col">作業日</th><th>作業内容</th><th>植物</th><th>メモ</th></tr></thead>';
+        const body = el("tbody");
+        data.textRecords.forEach(function (record) {
+          const tr = el("tr");
+          tr.append(el("td", "date-col", slashDate(record.workDate)));
+          const works = el("td", "works");
+          if (record.workTypes.length) {
+            record.workTypes.forEach(function (w) { works.append(el("div", "", w)); });
+          } else {
+            works.append(el("span", "none", "—"));
+          }
+          const tags = el("td", "tags-col");
+          if (record.plantTags.length) {
+            tags.textContent = record.plantTags.join("、");
+          } else {
+            tags.append(el("span", "none", "—"));
+          }
+          const memo = el("td", "memo-col");
+          if (record.memo) {
+            memo.textContent = record.memo;
+          } else {
+            memo.append(el("span", "none", "—"));
+          }
+          tr.append(works, tags, memo);
+          body.append(tr);
+        });
+        table.append(body);
+        wrap.append(table);
+        albumBody.append(wrap);
+        enableHorizontalScroll(wrap, null);
+      }
+
+      function renderAlbumData(data) {
+        const place = document.getElementById("albumPlace");
+        place.replaceChildren(document.createTextNode(data.location.name), el("span", "count", data.total + "件"));
+        renderYears(data);
+        albumBody.replaceChildren();
+        if (data.year === null) {
+          albumBody.append(el("p", "album-status", "この場所の記録はまだありません。「記録する」から記録すると、ここで振り返れます。"));
+          return;
+        }
+        renderPhotos(data);
+        renderTextTable(data);
+      }
+
+      function albumErrorMessage(error) {
+        if (error instanceof ApiError) {
+          if (error.status === 401) {
+            return "LINEの認証が切れました。LINEから開き直してください。";
+          }
+          if (error.code === "unknown_location") {
+            return "この場所が見つかりませんでした。場所を選び直してください。";
+          }
+        }
+        return "アルバムを読み込めませんでした。通信状況を確認してください。";
+      }
+
+      async function loadAlbum(year) {
+        const location = album.location;
+        const requestId = ++album.request;
+        const key = location.id + "|" + (year || "");
+        if (!album.cache[key]) {
+          albumBody.replaceChildren(el("p", "album-status", "読み込み中です。"));
+        }
+        try {
+          let data = album.cache[key];
+          if (!data) {
+            data = await api("GET", "/api/album?locationId=" + encodeURIComponent(location.id) + (year ? "&year=" + year : ""));
+            album.cache[key] = data;
+            album.cache[location.id + "|" + data.year] = data;
+          }
+          if (requestId !== album.request || albumScreen.classList.contains("hidden")) {
+            return;
+          }
+          renderAlbumData(data);
+        } catch (error) {
+          console.error("アルバムの取得エラー", error);
+          if (requestId !== album.request) {
+            return;
+          }
+          const status = el("div", "album-status error", albumErrorMessage(error));
+          const retry = el("button", "", "もう一度読み込む");
+          retry.type = "button";
+          retry.addEventListener("click", function () { loadAlbum(year); });
+          status.append(retry);
+          albumBody.replaceChildren(status);
+        }
+      }
+
+      function openAlbum(location) {
+        album.location = location;
+        applyTone(toneFor(location.id));
+        const place = document.getElementById("albumPlace");
+        place.replaceChildren(document.createTextNode(location.name));
+        document.getElementById("albumYears").replaceChildren();
+        pickerScreen.classList.add("hidden");
+        recordScreen.classList.add("hidden");
+        albumScreen.classList.remove("hidden");
+        document.body.classList.add("toned");
+        window.scrollTo(0, 0);
+        loadAlbum(null);
+      }
+
+      function leaveAlbum() {
+        album.request++;
+        if (album.observer) {
+          album.observer.disconnect();
+        }
+        album.queue = [];
+        showPicker();
+      }
+
+      document.getElementById("albumChangePlace").addEventListener("click", leaveAlbum);
+
+      // 相談(準備中): 画面は変えず、押したナビゲーションの下に案内を出す。「閉じる」か5秒で消える
+      let consultTimer = null;
+
+      function showConsultNote(nav) {
+        document.querySelectorAll(".consult-note").forEach(function (note) { note.remove(); });
+        const note = el("div", "consult-note");
+        note.setAttribute("role", "status");
+        note.append(el("b", "", "相談は準備中です"), document.createTextNode("今後、記録をもとに相談できるようになる予定です。"));
+        const close = el("button", "", "閉じる");
+        close.type = "button";
+        close.addEventListener("click", function () { note.remove(); });
+        note.append(close);
+        note.style.top = (nav.offsetTop + nav.offsetHeight + 8) + "px";
+        nav.parentElement.append(note);
+        clearTimeout(consultTimer);
+        consultTimer = setTimeout(function () { note.remove(); }, 5000);
+      }
+
+      // 3機能のナビゲーション(場所を選ぶ画面とアルバム画面の両方にある)
+      document.querySelectorAll("[data-mode]").forEach(function (button) {
+        button.addEventListener("click", function () {
+          if (button.dataset.mode === "consult") {
+            showConsultNote(button.closest(".flow-nav"));
+            return;
+          }
+          document.querySelectorAll(".consult-note").forEach(function (note) { note.remove(); });
+          if (!albumScreen.classList.contains("hidden")) {
+            if (button.dataset.mode === "album") {
+              return;
+            }
+            leaveAlbum();
+          }
+          setMode(button.dataset.mode);
+        });
+      });
+
+      enableHorizontalScroll(document.getElementById("albumYears"), null);
 
       async function start() {
         // 前回の一覧があれば、LIFFの準備を待たずにすぐ表示する(最新の一覧は裏で取り直す)

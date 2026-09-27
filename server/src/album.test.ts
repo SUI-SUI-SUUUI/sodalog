@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildAlbum, parseYear } from "./album";
+import { buildAlbum, countRecordsByLocation, parseYear } from "./album";
 
 const LOC = "loc_ab23cd45ef";
 const OTHER = "loc_zz23cd45ef";
@@ -115,4 +115,18 @@ test("上限: 超えたら古い記録を省き、truncated で知らせる", ()
 test("作業日が壊れた行・記録IDのない行は対象外", () => {
   const broken = [row("ok", "2026-01-01"), row("bad", "2026/01/01"), row("", "2026-01-02")];
   assert.equal(buildAlbum(broken, LOC).total, 1);
+});
+
+test("場所ごとの件数: 削除済み・壊れた行を除き、アルバムの total と一致する", () => {
+  const counts = countRecordsByLocation(rows);
+  assert.equal(counts.get(LOC), 7);
+  assert.equal(counts.get(OTHER), 1);
+  assert.equal(counts.get("loc_nothing000"), undefined);
+  assert.equal(counts.get(LOC), buildAlbum(rows, LOC).total);
+  assert.equal(counts.get(OTHER), buildAlbum(rows, OTHER).total);
+});
+
+test("場所ごとの件数: 作業日が壊れた行・記録IDのない行は数えない", () => {
+  const broken = [row("ok", "2026-01-01"), row("bad", "2026/01/01"), row("", "2026-01-02")];
+  assert.equal(countRecordsByLocation(broken).get(LOC), 1);
 });

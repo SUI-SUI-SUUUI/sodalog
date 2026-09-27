@@ -61,14 +61,31 @@ function toAlbumRecord(record: SavedRecord): AlbumRecord {
 }
 
 /**
+ * アルバムの対象になる記録(削除済み・記録IDのない行・作業日が壊れた行を除く)。
+ * アルバムの total と、場所一覧の件数(countRecordsByLocation)は、必ずこの同じ条件で数える。
+ */
+export function albumRecords(rows: unknown[][]): SavedRecord[] {
+  return rows
+    .filter((row) => !isDeletedRow(row))
+    .map(rowToRecord)
+    .filter((record) => record.recordId !== "" && yearOf(record) !== null);
+}
+
+// 場所IDごとの総記録数(写真あり＋写真なし)
+export function countRecordsByLocation(rows: unknown[][]): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const record of albumRecords(rows)) {
+    counts.set(record.locationId, (counts.get(record.locationId) ?? 0) + 1);
+  }
+  return counts;
+}
+
+/**
  * 「記録」タブの行から、ある場所のアルバムを作る。
  * year を省略すると、その場所で記録がある最新の年になる(記録が0件なら year は null)。
  */
 export function buildAlbum(rows: unknown[][], locationId: string, year?: number, limit = ALBUM_LIMIT): Album {
-  const records = rows
-    .filter((row) => !isDeletedRow(row))
-    .map(rowToRecord)
-    .filter((record) => record.recordId !== "" && record.locationId === locationId && yearOf(record) !== null);
+  const records = albumRecords(rows).filter((record) => record.locationId === locationId);
 
   const counts = new Map<number, number>();
   for (const record of records) {
