@@ -1,5 +1,5 @@
 /*
- * LIFFから呼ぶAPI(STEP 4-2: 場所の一覧取得・登録、STEP 4-3a: 記録の保存)。
+ * LIFFから呼ぶAPI(STEP 4-2: 場所の一覧取得・登録、STEP 4-3a: 記録の保存、STEP 4-4a: アルバムと写真の取得)。
  *
  * - 本人確認: Authorization: Bearer <LIFFのIDトークン>(クライアントのユーザーIDは信用しない)
  * - CORS: GitHub PagesのLIFF配信元だけを許可する
@@ -9,8 +9,10 @@ import express, { Router, type NextFunction, type Request, type RequestHandler, 
 import { describeGoogleError, getApiClient, isGoogleAuthError, type GoogleConfig } from "./google";
 import { asyncHandler } from "./http";
 import { requireLiffUser } from "./liffAuth";
+import { buildAlbum, parseYear } from "./album";
 import { createLocation, listLocations, normalizeLocationName } from "./locations";
-import { saveRecord, UnknownLocationError, validateRecordInput } from "./records";
+import { getPhoto, isValidFileId, parsePhotoSize, PhotoNotFoundError } from "./photos";
+import { readRecordRows, saveRecord, UnknownLocationError, validateRecordInput } from "./records";
 import { isStorageEnv, resolveStorage, StorageError, type StorageEnv } from "./storage";
 import { todayJst } from "./time";
 
@@ -63,6 +65,7 @@ function cors(allowedOrigin: string | undefined): RequestHandler {
       res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type");
       res.setHeader("Access-Control-Allow-Methods", "GET, POST");
       res.setHeader("Access-Control-Max-Age", "600");
+      res.setHeader("Access-Control-Expose-Headers", "X-Sodalog-Photo-Source");
     }
     if (req.method === "OPTIONS") {
       res.status(204).end();
@@ -169,6 +172,59 @@ export function createApiRouter(googleConfig: GoogleConfig | null): Router {
     })
   );
 
+  // アルバム: ある場所の、ある年(省略時は最新の年)の記録
+  router.get(
+    "/album",
+    asyncHandler(async (req, res) => {
+      const locationId = req.query.locationId;
+      if (typeof locationId !== "string" || !/^loc_[a-z0-9]{10}$/.test(locationId)) {
+        res.status(400).json({ error: "invalid_location_id" });
+        return;
+      }
+      const year = parseYear(req.query.year);
+      if (!year.ok) {
+        res.status(400).json({ error: "invalid_year" });
+        return;
+      }
+      const context = await getStorageContext(res);
+      if (!context) {
+        return;
+      }
+      const location = (await listLocations(context.client, context.spreadsheetId)).find(
+        (candidate) => candidate.id === locationId
+      );
+      if (!location) {
+        res.status(404).json({ error: "unknown_location" });
+        return;
+      }
+      const rows = await readRecordRows(context.client, context.spreadsheetId);
+      res.json({ location: { id: location.id, name: location.name }, ...buildAlbum(rows, location.id, year.year) });
+    })
+  );
+
+  // 写真の中身(サーバーが中継する。Driveの共有設定は変えない)
+  router.get(
+    "/photos/:fileId",
+    asyncHandler(async (req, res) => {
+      const fileId = req.params.fileId;
+      const size = parsePhotoSize(req.query.size);
+      if (!isValidFileId(fileId) || !size) {
+        res.status(400).json({ error: "invalid_photo_request" });
+        return;
+      }
+      const context = await getStorageContext(res);
+      if (!context) {
+        return;
+      }
+      const photo = await getPhoto(context.client, context.env, fileId, size);
+      res.setHeader("Content-Type", photo.contentType);
+      // 同じファイルIDの写真は変わらないため、利用者の端末にだけ1日保存させる
+      res.setHeader("Cache-Control", "private, max-age=86400");
+      res.setHeader("X-Sodalog-Photo-Source", photo.source);
+      res.send(photo.body);
+    })
+  );
+
   router.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
     const type = (err as { type?: string }).type;
     if (type === "entity.parse.failed") {
@@ -177,6 +233,10 @@ export function createApiRouter(googleConfig: GoogleConfig | null): Router {
     }
     if (type === "entity.too.large") {
       res.status(413).json({ error: "payload_too_large" });
+      return;
+    }
+    if (err instanceof PhotoNotFoundError) {
+      res.status(404).json({ error: "photo_not_found" });
       return;
     }
     if (err instanceof UnknownLocationError) {

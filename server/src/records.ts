@@ -52,6 +52,7 @@ const COL = {
   memo: 7,
   photoFileId: 8,
   source: 9,
+  deletedAt: 11,
 } as const;
 
 // crypto.randomUUID() の形式(小文字)
@@ -293,12 +294,14 @@ function parseJsonArray(value: string): string[] {
 // 「記録」タブの行(2行目以降)から、記録IDが一致する行を記録にする
 export function findRecordRow(rows: unknown[][], recordId: string): SavedRecord | undefined {
   const row = rows.find((cells) => String(cells[COL.recordId] ?? "").trim() === recordId);
-  if (!row) {
-    return undefined;
-  }
+  return row ? rowToRecord(row) : undefined;
+}
+
+// 「記録」タブの1行を記録にする
+export function rowToRecord(row: unknown[]): SavedRecord {
   const cell = (index: number) => String(row[index] ?? "");
   return {
-    recordId,
+    recordId: cell(COL.recordId).trim(),
     recordedAt: cell(COL.recordedAt),
     workDate: cell(COL.workDate),
     locationId: cell(COL.locationId),
@@ -373,6 +376,20 @@ async function savePhoto(context: SaveContext, input: RecordInput, locationName:
   return data.id;
 }
 
+// 削除日時(L列)が入っている行か。削除機能は未実装だが、入っていれば表示の対象から外す
+export function isDeletedRow(row: unknown[]): boolean {
+  return String(row[COL.deletedAt] ?? "").trim() !== "";
+}
+
+// 「記録」タブの全行(2行目以降)を読む
+export async function readRecordRows(auth: OAuth2Client, spreadsheetId: string): Promise<unknown[][]> {
+  const { data } = await sheets({ version: "v4", auth }).spreadsheets.values.get({
+    spreadsheetId,
+    range: DATA_RANGE,
+  });
+  return (data.values ?? []) as unknown[][];
+}
+
 // 同じ記録IDの行が2つできないよう、保存は1件ずつ行う
 const serialized = createSerialQueue();
 
@@ -387,11 +404,7 @@ export function saveRecord(
   return serialized(async () => {
     const sheetsApi = sheets({ version: "v4", auth: context.auth });
 
-    const { data } = await sheetsApi.spreadsheets.values.get({
-      spreadsheetId: context.spreadsheetId,
-      range: DATA_RANGE,
-    });
-    const existing = findRecordRow((data.values ?? []) as unknown[][], input.recordId);
+    const existing = findRecordRow(await readRecordRows(context.auth, context.spreadsheetId), input.recordId);
     if (existing) {
       return { record: existing, created: false };
     }
