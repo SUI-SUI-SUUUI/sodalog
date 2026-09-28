@@ -103,7 +103,7 @@
       /* アルバム側のタイルだけ、場所名の下に総記録数を小さく出す */
       .tile.with-count { flex-direction: column; gap: 4px; }
 
-      .tile .tile-count { color: rgba(31, 51, 35, .62); font-size: 12px; font-weight: 700; }
+      .tile .tile-count { color: rgba(31, 51, 35, .74); font-size: 13px; font-weight: 700; }
 
       /* 「＋ 場所を追加」は場所タイルと区別した控えめなボタン */
       .add-button {
@@ -190,22 +190,25 @@
       .record-place.size-s { font-size: 16px; }
 
       /* 「場所を変える」は1行固定 */
+      /* 「場所を変える」: 記録画面・アルバム画面で共通の、控えめな小さいボタン */
       .change-place {
         flex: none;
-        padding: 3px 0 6px;
-        border: 0;
-        background: none;
+        padding: 5px 12px;
+        border: 1px solid var(--c-line);
+        border-radius: 999px;
+        background: #fff;
         color: var(--c-strong);
         font: inherit;
-        font-size: 13px;
+        font-size: 14px;
         font-weight: 700;
+        line-height: 1.3;
         white-space: nowrap;
         cursor: pointer;
       }
 
       .change-place:disabled { opacity: .5; }
 
-      .record-note { margin: 4px 0 0; color: #5f6873; font-size: 13px; }
+      .record-note { margin: 4px 0 0; color: #4b5561; font-size: 13px; }
 
       /* 作業日: 枠全体が1つのボタン(左の日付を押しても、右の「変更」を押しても同じカレンダーが開く) */
       .date-box {
@@ -228,7 +231,7 @@
 
       .date-box:focus-visible { outline: 3px solid var(--c-strong); outline-offset: 2px; }
 
-      .date-box .date-label { margin-right: 8px; color: #5f6873; font-size: 13px; font-weight: 700; }
+      .date-box .date-label { margin-right: 8px; color: #4b5561; font-size: 13px; font-weight: 700; }
 
       .date-box .date-value { font-size: 16px; font-weight: 700; }
 
@@ -261,7 +264,7 @@
 
       .photo-empty .t { font-size: 16px; font-weight: 700; }
 
-      .photo-empty .s { color: #5f6873; font-size: 12px; }
+      .photo-empty .s { color: #4b5561; font-size: 12px; }
 
       .photo-filled { background: #eef2ee; }
 
@@ -271,7 +274,7 @@
 
       .photo-over button { padding: 7px 12px; border: 0; border-radius: 999px; background: rgba(38, 48, 58, .72); color: #fff; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
 
-      .record-label { margin: 14px 0 8px; color: #5f6873; font-size: 12px; font-weight: 700; letter-spacing: .06em; }
+      .record-label { margin: 14px 0 8px; color: #4b5561; font-size: 12px; font-weight: 700; letter-spacing: .06em; }
 
       /* 作業内容: 3列×3行で位置を固定 */
       .work-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
@@ -328,7 +331,7 @@
 
       .tag { display: inline-flex; align-items: center; padding: 4px 2px 4px 12px; border-radius: 999px; background: var(--c-band); color: var(--c-ink); font-size: 15px; }
 
-      .tag button { width: 30px; height: 30px; border: 0; background: none; color: #5f6873; font-size: 17px; cursor: pointer; }
+      .tag button { width: 30px; height: 30px; border: 0; background: none; color: #4b5561; font-size: 17px; cursor: pointer; }
 
       .memo {
         display: block;
@@ -349,7 +352,7 @@
 
       .field-error { margin: 6px 0 0; color: var(--error-text); font-size: 13px; }
 
-      .counter { margin: 4px 0 0; color: #5f6873; font-size: 12px; text-align: right; }
+      .counter { margin: 4px 0 0; color: #4b5561; font-size: 12px; text-align: right; }
 
       .counter.over { color: var(--error-text); }
 
@@ -367,7 +370,7 @@
 
       .save-row { display: flex; align-items: center; gap: 12px; }
 
-      .summary { flex: 1; min-width: 0; color: #5f6873; font-size: 13px; line-height: 1.4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .summary { flex: 1; min-width: 0; color: #4b5561; font-size: 13px; line-height: 1.4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
       .summary b { color: #26303a; }
 
@@ -441,7 +444,7 @@
 
       .cal-close span { font-size: 18px; line-height: 1; }
 
-      .cal-picked { margin: 8px 0 10px; padding: 10px 12px; border-radius: 12px; background: var(--c-frame); color: #5f6873; font-size: 14px; }
+      .cal-picked { margin: 8px 0 10px; padding: 10px 12px; border-radius: 12px; background: var(--c-frame); color: #4b5561; font-size: 14px; }
 
       .cal-picked b { margin-left: 6px; color: var(--c-ink); font-size: 20px; }
 
@@ -536,7 +539,7 @@
         padding: 1px 2px;
         border: 0;
         background: none;
-        color: #5f6873;
+        color: #4b5561;
         font: inherit;
         line-height: 1.25;
         cursor: pointer;
@@ -557,7 +560,7 @@
 
       .flow-icon img { display: block; width: 100%; height: 100%; }
 
-      .flow-name { margin-top: 3px; font-size: 13px; font-weight: 700; }
+      .flow-name { margin-top: 3px; font-size: 14px; font-weight: 700; }
 
       .flow-nav button[aria-pressed="true"] { color: #3f6b45; }
 
@@ -570,7 +573,7 @@
       .flow-nav button.coming .flow-icon { border-style: dashed; -webkit-filter: grayscale(1) opacity(.5); filter: grayscale(1) opacity(.5); }
 
       /* 「準備中」は丸の下の縁に重ねて、ナビゲーションの高さを増やさない */
-      .flow-soon { position: absolute; top: 48px; left: 50%; padding: 1px 6px; border: 1px solid #fff; border-radius: 999px; background: #eef0f3; color: #5f6873; font-size: 10px; font-weight: 700; white-space: nowrap; transform: translateX(-50%); }
+      .flow-soon { position: absolute; top: 48px; left: 50%; padding: 1px 6px; border: 1px solid #fff; border-radius: 999px; background: #eef0f3; color: #4b5561; font-size: 10px; font-weight: 700; white-space: nowrap; transform: translateX(-50%); }
 
       /* 相談を押したときの案内(画面は変えない) */
       .consult-note { position: absolute; left: 16px; right: 16px; z-index: 30; padding: 12px 14px; border: 1px solid #d7dbe0; border-radius: 14px; background: #fff; box-shadow: 0 8px 24px rgba(20, 28, 40, .16); color: #26303a; font-size: 14px; line-height: 1.6; text-align: left; }
@@ -606,7 +609,7 @@
         overflow-wrap: anywhere;
       }
 
-      .album-place .count { margin-left: 8px; color: #5f6873; font-size: 14px; white-space: nowrap; }
+      .album-place .count { margin-left: 8px; color: #4b5561; font-size: 14px; white-space: nowrap; }
 
       /* 横スクロールする並び(年ボタン・写真・表)。指とトラックパッドはブラウザ標準、マウスは JS で送る */
       .h-scroll {
@@ -627,7 +630,7 @@
 
       .album-years button { flex: none; min-width: 72px; height: 38px; padding: 0 14px; border: 1px solid var(--c-line); border-radius: 999px; background: #fff; color: #26303a; font: inherit; font-size: 15px; font-weight: 700; cursor: pointer; }
 
-      .album-years button small { margin-left: 4px; color: #5f6873; font-size: 11px; }
+      .album-years button small { margin-left: 4px; color: #4b5561; font-size: 12px; }
 
       .album-years button[aria-pressed="true"] { border-color: var(--c-strong); background: var(--c-strong); color: #fff; }
 
@@ -639,13 +642,13 @@
 
       .album-status button { display: block; margin-top: 8px; padding: 8px 14px; border: 1px solid currentColor; border-radius: 10px; background: #fff; color: inherit; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
 
-      .section-label { display: flex; align-items: baseline; justify-content: space-between; margin: 18px 16px 8px; color: #5f6873; font-size: 12px; font-weight: 700; letter-spacing: .06em; }
+      .section-label { display: flex; align-items: baseline; justify-content: space-between; margin: 18px 16px 8px; color: #4b5561; font-size: 14px; font-weight: 700; letter-spacing: .06em; }
 
-      .section-label small { font-weight: 400; letter-spacing: 0; }
+      .section-label small { font-size: 13px; font-weight: 400; letter-spacing: 0; }
 
       .truncated-note { margin: 0 16px 8px; padding: 8px 10px; border-radius: 10px; background: var(--c-frame); color: var(--c-ink); font-size: 12px; line-height: 1.5; }
 
-      .album-empty { margin: 0 16px; padding: 18px 12px; border: 1.5px dashed var(--c-line); border-radius: 12px; color: #5f6873; font-size: 13px; text-align: center; }
+      .album-empty { margin: 0 16px; padding: 18px 12px; border: 1.5px dashed var(--c-line); border-radius: 12px; color: #4b5561; font-size: 13px; text-align: center; }
 
       /* 写真の横並び: 正方形タイル、幅は画面幅の62%(最大322px) */
       .strip-wrap { position: relative; }
@@ -695,24 +698,24 @@
 
       .ph img.loaded { opacity: 1; }
 
-      .ph .date { position: absolute; left: 8px; top: 8px; padding: 4px 9px; border-radius: 999px; background: rgba(255, 255, 255, .92); color: #26303a; font-size: 12px; font-weight: 700; }
+      .ph .date { position: absolute; left: 8px; top: 8px; padding: 4px 9px; border-radius: 999px; background: rgba(255, 255, 255, .92); color: #26303a; font-size: 13px; font-weight: 700; }
 
       .ph .info { position: absolute; right: 8px; bottom: 8px; display: flex; width: 30px; height: 30px; align-items: center; justify-content: center; border-radius: 50%; background: rgba(255, 255, 255, .92); color: var(--c-strong); box-shadow: 0 1px 3px rgba(0, 0, 0, .2); }
 
-      .ph .failed { position: absolute; top: 50%; left: 0; right: 0; color: #5f6873; font-size: 12px; text-align: center; transform: translateY(-50%); }
+      .ph .failed { position: absolute; top: 50%; left: 0; right: 0; color: #4b5561; font-size: 12px; text-align: center; transform: translateY(-50%); }
 
-      .scroll-hint { margin: 2px 16px 0; color: #5f6873; font-size: 11px; }
+      .scroll-hint { margin: 4px 16px 0; color: #4b5561; font-size: 13px; }
 
       /* 写真なしの記録の表(新しい順、作業日の列を左端に固定) */
       .album-table-wrap { margin: 0 16px; border: 1px solid var(--c-line); border-radius: 12px; background: #fff; }
 
-      .album-table-wrap table { min-width: 100%; border-collapse: separate; border-spacing: 0; font-size: 14px; }
+      .album-table-wrap table { min-width: 100%; border-collapse: separate; border-spacing: 0; font-size: 15px; }
 
       .album-table-wrap th, .album-table-wrap td { padding: 9px 10px; border-bottom: 1px solid var(--c-line); text-align: left; vertical-align: top; }
 
       .album-table-wrap tr:last-child td { border-bottom: 0; }
 
-      .album-table-wrap th { background: var(--c-band); color: var(--c-ink); font-size: 12px; white-space: nowrap; }
+      .album-table-wrap th { background: var(--c-band); color: var(--c-ink); font-size: 13px; white-space: nowrap; }
 
       .album-table-wrap .date-col { position: -webkit-sticky; position: sticky; left: 0; z-index: 1; background: #fff; font-weight: 700; white-space: nowrap; box-shadow: 1px 0 0 var(--c-line); }
 
@@ -747,7 +750,7 @@
 
       .detail-list > div:last-child { border-bottom: 0; }
 
-      .detail-list dt { flex: none; width: 76px; color: #5f6873; font-size: 13px; font-weight: 700; }
+      .detail-list dt { flex: none; width: 76px; color: #4b5561; font-size: 13px; font-weight: 700; }
 
       .detail-list dd { flex: 1; min-width: 0; margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
     </style>
