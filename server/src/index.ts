@@ -2,6 +2,7 @@ import "dotenv/config";
 import express, { type ErrorRequestHandler } from "express";
 import { middleware as lineMiddleware, SignatureValidationFailed } from "@line/bot-sdk";
 import { createApiRouter } from "./api";
+import { createGasRouter } from "./gas";
 import { loadGoogleConfig } from "./google";
 import { createOAuthRouter } from "./oauth";
 import { createStorageRouter } from "./storage";
@@ -59,6 +60,8 @@ const googleConfig = loadGoogleConfig();
 app.use("/oauth", createOAuthRouter(googleConfig));
 app.use("/admin/storage", createStorageRouter(googleConfig));
 app.use("/api", createApiRouter(googleConfig));
+// STEP 4-5: GASとの同期呼び出しの確認用(X-Admin-Token 必須)
+app.use("/admin/gas", createGasRouter(googleConfig));
 
 const lineErrorHandler: ErrorRequestHandler = (err, _req, res, next) => {
   if (err instanceof SignatureValidationFailed) {

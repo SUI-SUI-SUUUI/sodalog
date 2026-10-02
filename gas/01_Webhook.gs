@@ -21,6 +21,14 @@ function doPost(e) {
       });
     }
 
+    /*
+     * Cloud Runからの同期呼び出し(STEP 4-5)。
+     * LINE Webhookの転送は body.action を持たないため、ここには入らない。
+     */
+    if (body.action) {
+      return handleCloudRunAction(body);
+    }
+
     var events = body.events || [];
 
     debugLog("events数: " + events.length);
@@ -80,6 +88,36 @@ function doPost(e) {
   return createJsonResponse({
     status: "ok",
   });
+}
+
+/**
+ * Cloud Runからの同期呼び出しを action ごとに処理し、結果をJSONで返す。
+ * 共有シークレットの確認は doPost で済ませてから呼ぶこと。
+ */
+function handleCloudRunAction(body) {
+  var action = String(body.action);
+
+  try {
+    debugLog("Cloud Run action: " + action);
+
+    if (action === "ping") {
+      return createJsonResponse({
+        ok: true,
+        action: "ping",
+      });
+    }
+
+    return createJsonResponse({
+      ok: false,
+      error: "unknown_action",
+    });
+  } catch (err) {
+    debugLog("Cloud Run action error: action=" + action + ", " + err);
+    return createJsonResponse({
+      ok: false,
+      error: "internal_error",
+    });
+  }
 }
 
 /**
